@@ -1,64 +1,65 @@
-# NotifyHub - Microservice Messaging Lab
+# NotifyHub
 
-NotifyHub là một nền tảng SaaS quản lý campaign gửi thông báo đa kênh cho nhiều tenant. Đây là project portfolio và phòng lab DevOps/messaging, không chỉ là một ứng dụng CRUD.
+NotifyHub is a multi-tenant notification platform for creating campaigns and delivering email/SMS messages asynchronously.
 
-Mục tiêu chính của project là học cách một hệ thống backend production vận hành: phân quyền, tenant isolation, giao tiếp đồng bộ, giao tiếp bất đồng bộ, retry, idempotency, observability, CI/CD và triển khai local trên một laptop.
+The repository is structured as a distributed-system laboratory. The initial implementation focuses on service boundaries, messaging semantics, failure handling, and local reproducibility.
 
-## Vì sao chọn bài toán này?
+## Scope
 
-Bài toán nối trực tiếp với kinh nghiệm trong CV:
+The MVP covers:
 
-- RBAC và multi-tenant trong hệ thống enterprise.
-- SMS/email, report generation và tracking lifecycle.
-- Redis cho OTP, cache, rate limit và idempotency.
-- RabbitMQ cho xử lý task bất đồng bộ.
-- Kafka cho domain event, replay và read model báo cáo.
-- Angular cho dashboard quản trị.
+- Tenant and user management.
+- Role-based access control.
+- Campaign lifecycle management.
+- Recipient import and validation.
+- Asynchronous email/SMS delivery.
+- Delivery status and retry tracking.
+- Per-tenant reporting.
 
-## Mục tiêu học tập
+The system does not call a real SMS provider in local development. MailHog is used as the local email sink; SMS delivery is represented by a provider adapter.
 
-Sau khi hoàn thành, ông có thể giải thích và demo được:
-
-1. Khi nào dùng REST, khi nào dùng RabbitMQ, khi nào dùng Kafka.
-2. Consumer group, partition, offset, key và ordering trong Kafka.
-3. Exchange, routing key, queue, acknowledgement, prefetch và dead-letter trong RabbitMQ.
-4. Vì sao cần Outbox Pattern để tránh lỗi ghi database thành công nhưng publish message thất bại.
-5. Retry, backoff, idempotency và xử lý duplicate message.
-6. Metrics, logs, traces và cách điều tra một message bị chậm hoặc thất bại.
-7. Build, test, security scan và release bằng GitHub Actions.
-8. Chạy hệ thống trên Docker Compose trước khi học Kubernetes.
-
-## Kiến trúc tổng thể
+## Architecture
 
 ```text
-                         Angular Dashboard
-                                |
-                           API Gateway
-                                |
-        +-----------------------+-----------------------+
-        |                       |                       |
-   Auth Service          Campaign Service        Reporting Service
-        |                       |                       ^
-   PostgreSQL                  |                       |
-                               |                       |
-                 +-------------+-------------+         |
-                 |                           |         |
-           Kafka events                RabbitMQ tasks  |
-           (replayable)                (work queues)   |
-                 |                           |         |
-                 |                    Notification     |
-                 +------------------> Service ---------+
-                                      |        |
-                                    Redis    MailHog
+                          Web Client
+                              |
+                        API Gateway :8080
+                              |
+        +---------------------+---------------------+
+        |                     |                     |
+  Auth Service          Campaign Service       Reporting Service
+      :8081                   :8082                  :8084
+        |                     |                     ^
+        |                     |                     |
+        |              Kafka domain events          |
+        |                     |                     |
+        |              RabbitMQ task queues         |
+        |                     v                     |
+        +-------------- Notification Service ------+
+                              :8083
+                          /          \
+                       Redis       MailHog
 ```
 
-## Quyết định dùng Kafka và RabbitMQ
+### Service boundaries
 
-Không dùng hai broker cho cùng một việc. Mỗi broker có một vai trò để ông học được sự khác nhau.
+| Service | Responsibility | Primary data |
+|---|---|---|
+| API Gateway | Routing and request-level cross-cutting concerns | None |
+| Auth Service | Users, tenants, roles, permissions, token lifecycle | PostgreSQL |
+| Campaign Service | Campaigns, recipients, scheduling, outbox records | PostgreSQL |
+| Notification Service | Delivery workers, provider adapters, retry state | PostgreSQL, Redis |
+| Reporting Service | Read model for delivery and campaign metrics | PostgreSQL |
 
-### Kafka: event backbone
+Each service owns its schema. A single PostgreSQL container is used locally to reduce resource usage; this does not imply shared tables between services.
 
-Kafka lưu event theo topic/partition và consumer có thể đọc lại event theo offset. Dùng Kafka cho những sự kiện có nhiều subscriber hoặc cần replay:
+## Messaging design
+
+Kafka and RabbitMQ are intentionally used for different message types.
+
+### Kafka: domain events
+
+Kafka is used for facts that may have multiple consumers and may need to be replayed:
 
 - `campaign.created`
 - `campaign.started`
@@ -66,192 +67,181 @@ Kafka lưu event theo topic/partition và consumer có thể đọc lại event 
 - `notification.failed`
 - `member.created`
 
-Consumer groups dự kiến:
+The event key is normally `tenantId` or `campaignId`. Ordering is guaranteed only within a partition. Reporting and audit consumers use separate consumer groups.
 
-- `reporting-service`: xây read model và dashboard thống kê.
-- `audit-service`: ghi audit trail.
-- `analytics-service`: phase nâng cao.
+### RabbitMQ: delivery tasks
 
-Partition key nên là `tenantId` hoặc `campaignId` để giữ ordering trong phạm vi cần thiết. Không hứa hẹn total ordering cho toàn bộ hệ thống.
-
-### RabbitMQ: command/task delivery
-
-RabbitMQ phù hợp với task cần giao cho worker và xác nhận hoàn thành:
+RabbitMQ is used for commands that should be processed by a worker:
 
 - `notification.send.email`
 - `notification.send.sms`
 - `notification.retry`
 
-Notification Service nhận task từ queue, gọi MailHog/provider, `ack` khi thành công và đưa message lỗi sang retry/DLQ khi thất bại. Dùng `prefetch` để worker không bị quá tải.
+The delivery worker uses manual acknowledgement, bounded prefetch, retry queues and a dead-letter queue. A task is acknowledged only after the provider adapter returns a successful result.
 
-### Luồng gửi campaign
+### Campaign delivery flow
 
 ```text
-1. POST /api/campaigns
-2. Campaign Service lưu campaign + outbox event trong PostgreSQL
-3. Outbox Publisher publish CampaignCreated vào Kafka
-4. Campaign Dispatcher tạo các NotificationTask vào RabbitMQ
-5. Notification Service xử lý task và gửi email/SMS
-6. Notification Service publish NotificationSent/Failed vào Kafka
-7. Reporting Service consume event và cập nhật read model
-8. Angular đọc trạng thái từ Reporting Service
+Client
+  -> Campaign Service: create campaign
+  -> PostgreSQL: campaign + outbox event in one transaction
+  -> Kafka: CampaignCreated
+  -> Campaign Dispatcher: create delivery tasks
+  -> RabbitMQ: SendEmailTask / SendSmsTask
+  -> Notification Service: execute task
+  -> Kafka: NotificationSent / NotificationFailed
+  -> Reporting Service: update read model
 ```
 
-Điểm cần nhớ: Kafka event thể hiện **điều đã xảy ra**; RabbitMQ message thể hiện **việc cần làm**.
+Kafka events represent facts that have occurred. RabbitMQ messages represent work that must be completed.
 
-## Công nghệ
+## Technology stack
 
-| Nhóm | Công nghệ | Mục đích |
-|---|---|---|
-| Backend | Java 21, Spring Boot | Service implementation |
-| API edge | Spring Cloud Gateway | Routing, correlation ID, rate limit về sau |
-| Auth | Spring Security, JWT, refresh token rotation | Authentication và RBAC |
-| Database | PostgreSQL | Transactional data, outbox, read model |
-| Cache | Redis | OTP, cache, rate limit, idempotency key |
-| Task broker | RabbitMQ + Spring AMQP | Worker tasks, retry, DLQ |
-| Event broker | Kafka-compatible Redpanda + Spring Kafka | Domain events, replay, consumer groups |
-| Email local | MailHog | Không cần provider thật khi development |
-| Frontend | Angular, TypeScript, SCSS | Admin dashboard |
-| Test | JUnit, Testcontainers, WireMock | Unit, integration, contract-like tests |
-| Observability | Actuator, Micrometer, Prometheus, Grafana, OpenTelemetry | Health, metrics, traces |
-| Packaging | Docker, Docker Compose | Local environment |
-| CI/CD | GitHub Actions, Trivy | Verify, image build, vulnerability scan |
-| Kubernetes | k3d hoặc kind | Chỉ học sau khi Compose ổn |
+| Area | Technology |
+|---|---|
+| Runtime | Java 21 |
+| Framework | Spring Boot, Spring Cloud Gateway |
+| Security | Spring Security, JWT, refresh-token rotation |
+| Persistence | PostgreSQL |
+| Cache and control data | Redis |
+| Event streaming | Spring Kafka, Kafka protocol |
+| Local Kafka broker | Redpanda, single-node profile |
+| Task messaging | Spring AMQP, RabbitMQ |
+| Frontend | Angular, TypeScript, SCSS |
+| Testing | JUnit, Testcontainers, WireMock |
+| Observability | Spring Actuator, Micrometer, Prometheus, Grafana, OpenTelemetry |
+| Build and delivery | Maven, Docker Compose, GitHub Actions, Trivy |
 
 ## Repository layout
 
 ```text
 notifyhub/
-├─ backend/
-│  ├─ api-gateway/
-│  ├─ auth-service/
-│  ├─ campaign-service/
-│  ├─ notification-service/
-│  ├─ reporting-service/
-│  └─ pom.xml
-├─ frontend/
-├─ infra/
-│  └─ prometheus.yml
-├─ docs/
-│  └─ adr/
-├─ .github/workflows/ci.yml
-├─ docker-compose.yml
-├─ .env.example
-└─ README.md
+├── backend/
+│   ├── api-gateway/
+│   ├── auth-service/
+│   ├── campaign-service/
+│   ├── notification-service/
+│   ├── reporting-service/
+│   └── pom.xml
+├── frontend/
+├── infra/
+│   └── prometheus.yml
+├── docs/
+│   └── adr/
+├── .github/workflows/ci.yml
+├── docker-compose.yml
+├── .env.example
+└── README.md
 ```
 
-## Chạy local trên laptop
+## Local development
 
-Yêu cầu: JDK 21, Maven 3.9+, Docker Desktop.
+### Prerequisites
+
+- JDK 21
+- Maven 3.9+
+- Docker Desktop
+
+### Start infrastructure
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up -d
-mvn -f backend/pom.xml clean verify
 ```
 
-RabbitMQ chạy mặc định. Kafka-compatible broker chạy bằng profile riêng để tiết kiệm RAM:
+RabbitMQ is enabled by default. Start the Kafka-compatible broker only when working on event streaming:
 
 ```powershell
 docker compose --profile kafka up -d
 ```
 
-Khi chỉ code Auth hoặc Campaign không cần message broker, có thể bật từng hạ tầng cần thiết thay vì chạy tất cả.
+### Build the backend
 
-| Service | URL | Mục đích |
-|---|---|---|
-| PostgreSQL | `localhost:5432` | Transactional database |
-| Redis | `localhost:6379` | Cache và control data |
-| RabbitMQ | `localhost:5672` | Task broker |
-| RabbitMQ UI | `http://localhost:15672` | Queue/exchange monitoring |
-| Kafka-compatible broker | `localhost:19092` | Event streaming |
-| Redpanda admin | `http://localhost:19644` | Broker health/admin |
-| MailHog UI | `http://localhost:8025` | Xem email local |
-| Prometheus | `http://localhost:9090` | Metrics |
-| Grafana | `http://localhost:3000` | Dashboard |
+```powershell
+mvn -f backend/pom.xml clean verify
+```
 
-## Lộ trình triển khai theo phase
+### Local endpoints
 
-### Phase 0 - Skeleton và local infrastructure
+| Component | Endpoint |
+|---|---|
+| API Gateway | `http://localhost:8080` |
+| Auth Service | `http://localhost:8081/actuator/health` |
+| Campaign Service | `http://localhost:8082/actuator/health` |
+| Notification Service | `http://localhost:8083/actuator/health` |
+| Reporting Service | `http://localhost:8084/actuator/health` |
+| RabbitMQ Management | `http://localhost:15672` |
+| Kafka-compatible broker | `localhost:19092` |
+| Redpanda Admin API | `http://localhost:19644` |
+| MailHog | `http://localhost:8025` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` |
 
-- [x] Maven multi-module và năm service chạy được.
-- [x] Docker Compose cho PostgreSQL, Redis, RabbitMQ, MailHog, Prometheus, Grafana.
-- [ ] Bổ sung Kafka-compatible broker profile.
-- [ ] Viết ADR đầu tiên về lựa chọn broker.
+## Delivery plan
 
-### Phase 1 - Auth và tenant isolation
+### Stage 1 - Foundation
 
-- [ ] User, Tenant, Role, Permission.
-- [ ] JWT access token và refresh token rotation.
-- [ ] Mọi bảng nghiệp vụ có `tenant_id`.
-- [ ] Test không thể đọc dữ liệu tenant khác.
-- [ ] Redis OTP và rate limiting.
+- [x] Maven multi-module build.
+- [x] Service bootstraps and health endpoints.
+- [x] Docker Compose infrastructure.
+- [x] GitHub Actions Maven verification.
+- [x] Kafka-compatible broker under the `kafka` profile.
 
-### Phase 2 - Campaign CRUD và REST boundary
+### Stage 2 - Identity and tenant isolation
 
-- [ ] Campaign lifecycle: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
-- [ ] Recipient import từ CSV.
-- [ ] Validation, pagination, filtering và unified error response.
-- [ ] Correlation ID xuyên qua Gateway và các service.
+- [ ] Tenant, user, role and permission model.
+- [ ] JWT access token and refresh-token rotation.
+- [ ] Tenant context propagation through the request boundary.
+- [ ] Database isolation tests.
+- [ ] Redis-backed OTP and rate limiting.
 
-### Phase 3 - RabbitMQ work queue
+### Stage 3 - Campaign API
 
-- [ ] Exchange, queue, routing key cho email/SMS task.
-- [ ] Publisher confirm.
-- [ ] Manual acknowledgement và prefetch.
-- [ ] Retry queue với backoff.
-- [ ] Dead-letter exchange/queue.
-- [ ] Idempotency theo `notificationId`.
+- [ ] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
+- [ ] Recipient import and validation.
+- [ ] Pagination, filtering and idempotent commands.
+- [ ] OpenAPI specification.
 
-### Phase 4 - Kafka event streaming
+### Stage 4 - RabbitMQ delivery pipeline
 
-- [ ] Topic, partition, replication setting cho local profile.
-- [ ] Producer gửi domain event bằng Spring Kafka.
-- [ ] Consumer group cho Reporting và Audit.
-- [ ] Offset commit, consumer restart và replay event.
-- [ ] Partition key theo `tenantId`/`campaignId`.
-- [ ] Schema version trong event envelope.
+- [ ] Exchange and queue declarations.
+- [ ] Publisher confirms.
+- [ ] Manual acknowledgement and prefetch.
+- [ ] Retry with backoff.
+- [ ] Dead-letter exchange and dead-letter queue.
+- [ ] Idempotent delivery by `notificationId`.
 
-### Phase 5 - Outbox và consistency
+### Stage 5 - Kafka event pipeline
 
-- [ ] Outbox table trong Campaign Service.
-- [ ] Scheduled publisher hoặc CDC-style polling.
-- [ ] Đảm bảo event không mất khi transaction commit.
-- [ ] Xử lý duplicate event ở consumer.
-- [ ] ADR về at-least-once delivery.
+- [ ] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
+- [ ] Topic and partition configuration.
+- [ ] Consumer groups for reporting and audit.
+- [ ] Offset management and replay procedure.
+- [ ] Consumer handling for duplicate and out-of-order events.
 
-### Phase 6 - Reporting và observability
+### Stage 6 - Consistency and operations
 
-- [ ] Read model riêng cho dashboard.
-- [ ] Actuator health/readiness/liveness.
-- [ ] Micrometer metrics cho throughput, lag, retry và failure rate.
-- [ ] Trace REST -> Kafka/RabbitMQ -> worker.
-- [ ] Grafana dashboard và runbook điều tra lỗi.
+- [ ] Transactional Outbox in Campaign Service.
+- [ ] Reporting read model.
+- [ ] Metrics for throughput, consumer lag, retry count and failure rate.
+- [ ] Distributed tracing across REST, Kafka and RabbitMQ.
+- [ ] Testcontainers integration suite.
+- [ ] Container image build and Trivy scan in CI.
+- [ ] Kubernetes deployment with k3d.
 
-### Phase 7 - Delivery
+## Design constraints
 
-- [ ] Testcontainers cho PostgreSQL, Redis, RabbitMQ và Kafka.
-- [ ] GitHub Actions verify/test.
-- [ ] Build container images.
-- [ ] Trivy scan.
-- [ ] Deploy local bằng k3d.
-- [ ] Chỉ sau đó mới cân nhắc free-tier cloud.
+- Default delivery guarantee is at-least-once; consumers must be idempotent.
+- Ordering is scoped to a Kafka partition, not the entire system.
+- A message is not acknowledged before its side effect is completed.
+- Business data and an outbox record must be committed in the same database transaction.
+- A broker is selected according to message semantics, not convenience.
+- Local infrastructure is split into profiles to keep laptop resource usage manageable.
 
-## Nguyên tắc để học được nhiều
+## Architecture decisions
 
-- Không dùng Kafka và RabbitMQ một cách trùng lặp.
-- Mỗi phase phải có demo, test và một ADR.
-- Không chạy cả hệ thống 24/7 trên laptop; bật broker theo profile.
-- Không thêm service mới nếu chưa chứng minh được boundary của service hiện tại.
-- Không gọi hệ thống là "exactly once" nếu chưa giải thích được transaction và idempotency.
-- Không dùng database chung cho mọi service trong production design; local có thể dùng một PostgreSQL instance nhưng mỗi service nên có schema/database ownership riêng.
+- [ADR-0001: Kafka for domain events and RabbitMQ for task delivery](docs/adr/0001-messaging-strategy.md)
 
-## Tiêu chí portfolio
+## Project status
 
-README cuối cùng phải có architecture diagram, sequence diagram, API examples, cách chạy local, test strategy, failure scenarios, dashboard screenshot và một mục "trade-offs". Người xem repository phải thấy được lý do chọn công nghệ, không chỉ thấy danh sách công nghệ.
-
-## Tài liệu tham khảo
-
-- [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
-- [RabbitMQ Tutorials](https://www.rabbitmq.com/tutorials)
-- [RabbitMQ AMQP Concepts](https://www.rabbitmq.com/tutorials/amqp-concepts)
+The repository currently contains the service skeleton, local infrastructure, build configuration and architecture documentation. Business workflows, producers, consumers and persistence models are implemented incrementally according to the delivery plan above.
