@@ -84,8 +84,9 @@ The delivery worker uses manual acknowledgement, bounded prefetch, retry queues 
 ```text
 Client
   -> Campaign Service: create campaign
-  -> PostgreSQL: campaign + outbox event in one transaction
-  -> Kafka: CampaignCreated
+  -> Campaign Service: import recipients and start campaign
+  -> PostgreSQL: campaign state + outbox event in one transaction
+  -> Kafka: CampaignStarted
   -> Campaign Dispatcher: create delivery tasks
   -> RabbitMQ: SendEmailTask / SendSmsTask
   -> Notification Service: execute task
@@ -241,6 +242,11 @@ mvn -f backend/pom.xml clean verify
 ## Architecture decisions
 
 - [ADR-0001: Kafka for domain events and RabbitMQ for task delivery](docs/adr/0001-messaging-strategy.md)
+
+## Domain documentation
+
+- [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
+- [Testing strategy and TDD readiness](docs/testing-strategy.md)
 
 ## Project status
 
