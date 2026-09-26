@@ -127,4 +127,4 @@ Một business rule được xem là hoàn thành khi:
 
 ## 7. Bước tiếp theo
 
-Milestone gần nhất là thiết lập test dependency cho `campaign-service`, tạo `CampaignTest`, rồi triển khai Campaign domain theo từng vòng Red–Green–Refactor. Chưa cần kết nối PostgreSQL, Kafka hoặc RabbitMQ trong vòng TDD đầu tiên.
+Domain core hiện đã bao phủ state machine của Campaign và quy tắc chuẩn hóa, kiểm tra, loại trùng recipient bằng unit test thuần Java. Milestone tiếp theo là thêm application service, JPA/Flyway adapter và PostgreSQL Testcontainers để kiểm chứng unique constraint, tenant isolation và quy tắc chỉ có một import batch `PROCESSING` cho mỗi campaign.
