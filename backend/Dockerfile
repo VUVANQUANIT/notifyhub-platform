@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM eclipse-temurin:22-jdk-jammy AS build
 
 ARG MODULE
 WORKDIR /workspace/backend
@@ -22,7 +22,7 @@ COPY backend .
 RUN ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am -DskipTests package \
     && cp "$MODULE"/target/"$MODULE"-*.jar /tmp/app.jar
 
-FROM eclipse-temurin:21-jre-jammy AS runtime
+FROM eclipse-temurin:22-jre-jammy AS runtime
 
 RUN groupadd --system --gid 1001 notifyhub \
     && useradd --system --uid 1001 --gid notifyhub --home-dir /app --shell /usr/sbin/nologin notifyhub
