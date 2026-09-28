@@ -198,7 +198,7 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 3 - Campaign API
 
-- [ ] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
+- [x] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
 - [ ] Recipient import and validation.
 - [ ] Pagination, filtering and idempotent commands.
 - [ ] OpenAPI specification.

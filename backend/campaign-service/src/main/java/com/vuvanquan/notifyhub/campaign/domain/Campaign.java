@@ -75,6 +75,10 @@ public final class Campaign {
         this.content = newContent;
     }
 
+    public void assertCanImportRecipients() {
+        ensureDraft("Recipients can only be imported into a draft campaign");
+    }
+
     public void start(CampaignReadiness readiness, Instant now) {
         ensureDraft("Campaign can only be started from DRAFT");
         Objects.requireNonNull(readiness, "Campaign readiness must not be null");

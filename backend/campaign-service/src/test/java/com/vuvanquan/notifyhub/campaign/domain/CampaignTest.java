@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CampaignTest {
@@ -129,6 +130,22 @@ class CampaignTest {
         assertThatThrownBy(() -> campaign.start(READY, STARTED_AT.plusSeconds(1)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Campaign can only be started from DRAFT");
+    }
+
+    @Test
+    void draft_campaign_accepts_recipient_imports() {
+        assertThatCode(() -> immediateCampaign().assertCanImportRecipients())
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void started_campaign_rejects_recipient_imports() {
+        Campaign campaign = immediateCampaign();
+        campaign.start(READY, STARTED_AT);
+
+        assertThatThrownBy(campaign::assertCanImportRecipients)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Recipients can only be imported into a draft campaign");
     }
 
     @Test
