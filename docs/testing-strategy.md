@@ -21,16 +21,16 @@ Project **đủ nền tảng cấu trúc để bắt đầu viết test**, vì:
 - Campaign flow, state machine và các invariant đã được mô tả trong `docs/domain/campaign-domain.md`.
 - Maven Surefire được quản lý thông qua Spring Boot parent và sẽ tự chạy các test đúng quy ước tên.
 
-Project **chưa sẵn sàng chạy test mới ngay lập tức**, vì:
+Các phần nền tảng đã được triển khai:
 
-- Các module chưa khai báo `spring-boot-starter-test` hoặc dependency JUnit tương đương.
-- Chưa có source directory hoặc test class trong `src/test/java`.
-- Chưa có Testcontainers và các dependency dành cho integration test.
-- Lệnh `mvn verify` hiện thành công nhưng báo `No tests to run`; kết quả này mới xác nhận source hiện tại biên dịch và đóng gói được, chưa xác nhận business behavior.
+- Campaign Service có `spring-boot-starter-test`, unit test domain và CSV parser.
+- `CampaignApiIT` chạy HTTP thật với PostgreSQL Testcontainers: migration, mapping, tenant isolation, idempotency, concurrency, constraints, scheduled activation và atomic outbox rollback.
+- `CampaignSecurityIT` kiểm tra JWT, scope, chữ ký sai, token hết hạn và thiếu tenant.
+- Surefire chạy `*Test`; Failsafe chạy `*IT` trong `verify`. Docker phải hoạt động; integration test không tự skip khi thiếu Docker.
 
-## 3. Thiết lập tối thiểu để bắt đầu
+## 3. Thiết lập kiểm thử
 
-Trong `backend/campaign-service/pom.xml`, thêm test dependency:
+Trong `backend/campaign-service/pom.xml` đã khai báo test dependency:
 
 ```xml
 <dependency>
@@ -61,9 +61,9 @@ Chạy toàn bộ kiểm tra backend:
 mvn -f backend/pom.xml clean verify
 ```
 
-## 4. Test đầu tiên nên viết
+## 4. Các invariant đã được bao phủ
 
-Thứ tự test nên đi từ invariant nhỏ đến state transition:
+Unit test đi từ invariant nhỏ đến state transition:
 
 1. Campaign mới được tạo ở trạng thái `DRAFT`.
 2. Tên và nội dung rỗng bị từ chối.
@@ -103,7 +103,7 @@ Sau khi viết test, phải chạy test và nhìn thấy nó thất bại vì pr
 
 - Phạm vi: JPA mapping, Flyway migration, repository, unique constraint và tenant isolation.
 - Dùng PostgreSQL Testcontainers thay vì H2 để hành vi gần production.
-- Triển khai sau khi domain model ổn định và persistence adapter được thêm vào.
+- Đã triển khai trong `CampaignApiIT`; database test tách biệt với database Compose local.
 
 ### Messaging integration test
 
@@ -127,4 +127,4 @@ Một business rule được xem là hoàn thành khi:
 
 ## 7. Bước tiếp theo
 
-Domain core hiện đã bao phủ state machine của Campaign và quy tắc chuẩn hóa, kiểm tra, loại trùng recipient bằng unit test thuần Java. Milestone tiếp theo là thêm application service, JPA/Flyway adapter và PostgreSQL Testcontainers để kiểm chứng unique constraint, tenant isolation và quy tắc chỉ có một import batch `PROCESSING` cho mỗi campaign.
+Application service, JPA/Flyway adapter, REST API và PostgreSQL Testcontainers đã được triển khai. Chạy `./mvnw clean verify` (Windows: `.\mvnw.cmd`) từ `backend` để chạy cả unit và integration test. Bước tiếp theo là kiểm thử outbox publisher/delivery worker với broker: duplicate event, publish failure, retry/backoff, dead letter và idempotent provider calls. Campaign RUNNING hiện mới ghi ý định bắt đầu vào outbox, chưa gửi email/SMS.

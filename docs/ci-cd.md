@@ -24,7 +24,7 @@ SemVer tag (vX.Y.Z)
 
 ### CI
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, manual dispatch and as a reusable workflow.
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main` and `develop`, manual dispatch and as a reusable workflow. Campaign integration tests require Docker and run PostgreSQL Testcontainers during `verify`.
 
 - Builds and tests all Maven modules with Java 21 and Maven Wrapper 3.9.16.
 - Uploads Surefire/Failsafe reports even when verification fails.

@@ -199,9 +199,10 @@ mvn -f backend/pom.xml clean verify
 ### Stage 3 - Campaign API
 
 - [x] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
-- [ ] Recipient import and validation.
-- [ ] Pagination, filtering and idempotent commands.
-- [ ] OpenAPI specification.
+- [x] Recipient CSV import and validation (bounded synchronous uploads).
+- [x] Pagination, status filtering and idempotent create/start commands.
+- [x] OpenAPI specification.
+- [x] PostgreSQL persistence, Flyway migrations and Campaign tenant isolation.
 
 ### Stage 4 - RabbitMQ delivery pipeline
 
@@ -222,11 +223,11 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 6 - Consistency and operations
 
-- [ ] Transactional Outbox in Campaign Service.
+- [x] Transactional Outbox records in Campaign Service (publisher pending).
 - [ ] Reporting read model.
 - [ ] Metrics for throughput, consumer lag, retry count and failure rate.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
-- [ ] Testcontainers integration suite.
+- [x] Campaign API/persistence/security Testcontainers integration suite.
 - [ ] Container image build and Trivy scan in CI.
 - [ ] Kubernetes deployment with k3d.
 
@@ -247,7 +248,8 @@ mvn -f backend/pom.xml clean verify
 
 - [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
+- [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
 
 ## Project status
 
-The repository currently contains the service skeleton, local infrastructure, build configuration and architecture documentation. Business workflows, producers, consumers and persistence models are implemented incrementally according to the delivery plan above.
+Campaign Service now implements create, CSV import, listing, start/schedule and transactional outbox persistence, backed by PostgreSQL integration tests. Local actor headers are development-only; production requires an external JWT issuer. Outbox publishing, delivery workers and the other services' business workflows remain pending.
