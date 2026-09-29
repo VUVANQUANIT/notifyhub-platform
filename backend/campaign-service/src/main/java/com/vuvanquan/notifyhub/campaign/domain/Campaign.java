@@ -69,7 +69,7 @@ public final class Campaign {
         this.name = Objects.requireNonNull(newName, "Campaign name must not be null");
     }
 
-    public void changeContent(MessageContent newContent) {
+    public void updateContent(MessageContent newContent) {
         ensureDraft("Only a draft campaign can change content");
         Objects.requireNonNull(newContent, "Message content must not be null").validateFor(channel);
         this.content = newContent;

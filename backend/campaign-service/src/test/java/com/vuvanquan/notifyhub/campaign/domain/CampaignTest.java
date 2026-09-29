@@ -1,6 +1,8 @@
 package com.vuvanquan.notifyhub.campaign.domain;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -122,14 +124,17 @@ class CampaignTest {
         assertThat(campaign.startedAt()).contains(scheduledAt);
     }
 
-    @Test
-    void campaign_cannot_start_twice() {
-        Campaign campaign = immediateCampaign();
-        campaign.start(READY, STARTED_AT);
+    @ParameterizedTest
+    @EnumSource(value = CampaignStatus.class, names = {"SCHEDULED", "RUNNING", "COMPLETED", "FAILED"})
+    void campaign_cannot_start_twice(CampaignStatus status) {
+        Campaign campaign = campaignInStatus(status);
+        var originalStartedAt = campaign.startedAt();
 
         assertThatThrownBy(() -> campaign.start(READY, STARTED_AT.plusSeconds(1)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Campaign can only be started from DRAFT");
+        assertThat(campaign.status()).isEqualTo(status);
+        assertThat(campaign.startedAt()).isEqualTo(originalStartedAt);
     }
 
     @Test
@@ -155,23 +160,42 @@ class CampaignTest {
         MessageContent newContent = MessageContent.email("Updated", "Updated body");
 
         campaign.rename(newName);
-        campaign.changeContent(newContent);
+        campaign.updateContent(newContent);
 
         assertThat(campaign.name()).isEqualTo(newName);
         assertThat(campaign.content()).isEqualTo(newContent);
+        assertThat(campaign.status()).isEqualTo(CampaignStatus.DRAFT);
     }
 
-    @Test
-    void started_campaign_cannot_be_edited() {
-        Campaign campaign = immediateCampaign();
-        campaign.start(READY, STARTED_AT);
+    @ParameterizedTest
+    @EnumSource(value = CampaignStatus.class, names = {"SCHEDULED", "RUNNING", "COMPLETED", "FAILED"})
+    void started_campaign_cannot_be_edited(CampaignStatus status) {
+        Campaign campaign = campaignInStatus(status);
+        CampaignName originalName = campaign.name();
+        MessageContent originalContent = campaign.content();
 
         assertThatThrownBy(() -> campaign.rename(new CampaignName("Updated")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Only a draft campaign can be renamed");
-        assertThatThrownBy(() -> campaign.changeContent(MessageContent.email("Updated", "Body")))
+        assertThatThrownBy(() -> campaign.updateContent(MessageContent.email("Updated", "Body")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Only a draft campaign can change content");
+        assertThat(campaign.name()).isEqualTo(originalName);
+        assertThat(campaign.content()).isEqualTo(originalContent);
+        assertThat(campaign.status()).isEqualTo(status);
+    }
+
+    @Test
+    void updating_email_campaign_with_sms_content_preserves_original_content() {
+        Campaign campaign = immediateCampaign();
+        MessageContent originalContent = campaign.content();
+
+        assertThatThrownBy(() -> campaign.updateContent(MessageContent.sms("Hello")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Email content must have a subject");
+
+        assertThat(campaign.content()).isEqualTo(originalContent);
+        assertThat(campaign.status()).isEqualTo(CampaignStatus.DRAFT);
     }
 
     @Test
@@ -219,6 +243,19 @@ class CampaignTest {
         assertThatThrownBy(failed::complete)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Only a running campaign can be completed");
+    }
+
+    private Campaign campaignInStatus(CampaignStatus status) {
+        Campaign campaign = status == CampaignStatus.SCHEDULED
+                ? campaign(Schedule.at(STARTED_AT.plusSeconds(60)))
+                : immediateCampaign();
+        campaign.start(READY, STARTED_AT);
+        if (status == CampaignStatus.COMPLETED) {
+            campaign.complete();
+        } else if (status == CampaignStatus.FAILED) {
+            campaign.fail();
+        }
+        return campaign;
     }
 
     private Campaign runningCampaign() {
