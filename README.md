@@ -206,8 +206,8 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 4 - RabbitMQ delivery pipeline
 
-- [ ] Exchange and queue declarations.
-- [ ] Publisher confirms.
+- [x] Durable exchange and email/SMS queue declarations.
+- [x] Publisher confirms and mandatory routing checks.
 - [ ] Manual acknowledgement and prefetch.
 - [ ] Retry with backoff.
 - [ ] Dead-letter exchange and dead-letter queue.
@@ -215,20 +215,21 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 5 - Kafka event pipeline
 
-- [ ] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
-- [ ] Topic and partition configuration.
+- [x] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
+- [x] Topic and partition configuration; CampaignStarted dispatcher consumer.
 - [ ] Consumer groups for reporting and audit.
-- [ ] Offset management and replay procedure.
-- [ ] Consumer handling for duplicate and out-of-order events.
+- [x] Dispatcher offset management, dead-letter topic and replay procedure.
+- [x] Dispatcher handling for duplicate events and independence from earlier event arrival.
 
 ### Stage 6 - Consistency and operations
 
-- [x] Transactional Outbox records in Campaign Service (publisher pending).
+- [x] Transactional Outbox records and Kafka publisher in Campaign Service.
+- [x] Durable batched dispatch jobs and confirmed RabbitMQ task publishing.
 - [ ] Reporting read model.
 - [ ] Metrics for throughput, consumer lag, retry count and failure rate.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
 - [x] Campaign API/persistence/security Testcontainers integration suite.
-- [ ] Container image build and Trivy scan in CI.
+- [x] Container image build and Trivy scan configured in CI.
 - [ ] Kubernetes deployment with k3d.
 
 ## Design constraints
@@ -249,7 +250,8 @@ mvn -f backend/pom.xml clean verify
 - [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
 - [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
+- [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
 
 ## Project status
 
-Campaign Service now implements create, CSV import, listing, start/schedule and transactional outbox persistence, backed by PostgreSQL integration tests. Local actor headers are development-only; production requires an external JWT issuer. Outbox publishing, delivery workers and the other services' business workflows remain pending.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. The opt-in `messaging` profile publishes Kafka events, consumes CampaignStarted into durable dispatch jobs and publishes personalized email/SMS tasks to RabbitMQ with confirms and retry. PostgreSQL/Kafka/RabbitMQ integration tests cover replay and publish failures. Local actor headers are development-only; production requires an external JWT issuer. Delivery workers, delivery-result aggregation and the other services' business workflows remain pending; a RUNNING campaign has not yet sent email/SMS.

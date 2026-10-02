@@ -104,8 +104,9 @@ Có thể tắt bằng `campaign.scheduling.enabled=false`.
 CampaignCreated, CampaignScheduled, CampaignStarted, RecipientImportCompleted/Rejected được ghi vào
 `campaign.outbox_events` trong cùng transaction với business data. Envelope có event ID, type,
 version, tenant, campaign, occurredAt, correlationId và JSON payload. Correlation ID hiện do service sinh.
-Publisher Kafka/RabbitMQ và worker gửi tin chưa thuộc thay đổi này: RUNNING biểu thị đã ghi ý định bắt đầu;
-chưa có email/SMS nào được gửi. Completion/failure được giữ trong domain cho delivery worker sau này.
+Profile `messaging` bật publisher Kafka, dispatcher và publisher RabbitMQ; xem [Campaign messaging](campaign-messaging.md).
+RUNNING biểu thị đã ghi ý định bắt đầu và có thể đã đưa task vào queue; chưa có worker gửi email/SMS.
+Completion/failure được giữ trong domain cho bước tổng hợp kết quả delivery sau này.
 
 ## Kiểm chứng
 
