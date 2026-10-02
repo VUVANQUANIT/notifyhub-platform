@@ -14,7 +14,8 @@ profile `local` đơn thuần vẫn chỉ ghi outbox. Production cần thêm c�
 được cấp riêng; không dùng profile `local` trên môi trường dùng chung.
 
 REST flow và CSV mẫu: [Campaign Service](campaign-service.md).
-RabbitMQ Management: http://localhost:15672. Các queue chưa có worker nên task sẽ ở trạng thái ready.
+RabbitMQ Management: http://localhost:15672. Bật [Notification Worker](notification-worker.md) để tiêu thụ task;
+nếu worker chưa chạy, task ở trạng thái ready.
 
 ## Luồng và transaction
 
@@ -72,8 +73,9 @@ Biến không có dữ liệu được giữ nguyên literal; đây chưa phải
 
 Đây là **at-least-once**, không phải exactly-once end-to-end. Nếu broker đã nhận nhưng DB chưa commit,
 publisher sẽ gửi lại cùng event ID hoặc notification ID. Replay Kafka không tạo thêm logical task;
-queue RabbitMQ vẫn có thể nhận message trùng. Worker sau này phải deduplicate theo `notificationId`
-và dùng idempotency của provider nếu có. Producer confirm không đồng nghĩa email/SMS đã được gửi.
+queue RabbitMQ vẫn có thể nhận message trùng. Notification Worker deduplicate theo `notificationId`
+sau commit và giữa các concurrent worker; SMTP không hỗ trợ exactly-once khi crash trước DB commit.
+Producer confirm không đồng nghĩa email/SMS đã được gửi.
 
 - Kafka/RabbitMQ publish lỗi: giữ record pending, tăng `publish_attempts`, ghi loại lỗi vào `last_error`,
   exponential backoff 1/2/4/... tối đa 60 giây; không tự bỏ message sau N lần.
@@ -85,7 +87,7 @@ và dùng idempotency của provider nếu có. Producer confirm không đồng 
   an toàn nếu campaign đã kết thúc. Event chưa có job mà tham chiếu campaign không hợp lệ sẽ vào DLT.
 - RabbitMQ mất binding: publisher không đánh dấu published dù broker ack; sửa binding rồi chờ retry.
 - Job hoàn tất là đã tạo đủ task; task published là đã vào broker. Campaign vẫn `RUNNING` cho đến khi
-  có Delivery Worker và cơ chế tổng hợp kết quả ở bước sau.
+  có cơ chế tổng hợp kết quả delivery ở bước sau; worker đã lưu kết quả trong schema notification.
 
 SQL quan sát (read-only):
 
