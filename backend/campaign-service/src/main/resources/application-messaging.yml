@@ -1,0 +1,45 @@
+# Opt in with --spring.profiles.active=local,messaging.
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 4
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 10000
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+    consumer:
+      group-id: campaign-dispatcher-v1
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    admin:
+      fail-fast: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:notifyhub}
+    password: ${RABBITMQ_PASSWORD:notifyhub_local_password}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 5s
+    template:
+      mandatory: true
+campaign:
+  messaging:
+    enabled: true
+    polling-enabled: true
+    topic: notifyhub.campaign.events.v1
+    dead-letter-topic: notifyhub.campaign.events.v1.dlt
+    partitions: 3
+    replicas: 1
+    batch-size: 100
+    poll-delay-ms: 1000

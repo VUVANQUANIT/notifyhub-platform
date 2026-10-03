@@ -77,7 +77,7 @@ RabbitMQ is used for commands that should be processed by a worker:
 - `notification.send.sms`
 - `notification.retry`
 
-The delivery worker uses manual acknowledgement, bounded prefetch, retry queues and a dead-letter queue. A task is acknowledged only after the provider adapter returns a successful result.
+The delivery worker uses manual acknowledgement, bounded prefetch, durable scheduled retries and dead-letter queues. A task is acknowledged after the provider result or a retry/dead-letter handoff commits to PostgreSQL.
 
 ### Campaign delivery flow
 
@@ -206,36 +206,38 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 4 - RabbitMQ delivery pipeline
 
-- [ ] Exchange and queue declarations.
-- [ ] Publisher confirms.
-- [ ] Manual acknowledgement and prefetch.
-- [ ] Retry with backoff.
-- [ ] Dead-letter exchange and dead-letter queue.
-- [ ] Idempotent delivery by `notificationId`.
+- [x] Durable exchange and email/SMS queue declarations.
+- [x] Publisher confirms and mandatory routing checks.
+- [x] Manual acknowledgement and bounded prefetch.
+- [x] Bounded provider retries with durable exponential backoff.
+- [x] Confirmed dead-letter exchange and email/SMS dead-letter queues.
+- [x] Delivery deduplication by `notificationId` after commit and across concurrent workers.
+- [x] Email delivery through SMTP/MailHog and simulated SMS, with PostgreSQL delivery state.
 
 ### Stage 5 - Kafka event pipeline
 
-- [ ] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
-- [ ] Topic and partition configuration.
+- [x] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
+- [x] Topic and partition configuration; CampaignStarted dispatcher consumer.
 - [ ] Consumer groups for reporting and audit.
-- [ ] Offset management and replay procedure.
-- [ ] Consumer handling for duplicate and out-of-order events.
+- [x] Dispatcher offset management, dead-letter topic and replay procedure.
+- [x] Dispatcher handling for duplicate events and independence from earlier event arrival.
 
 ### Stage 6 - Consistency and operations
 
-- [x] Transactional Outbox records in Campaign Service (publisher pending).
+- [x] Transactional Outbox records and Kafka publisher in Campaign Service.
+- [x] Durable batched dispatch jobs and confirmed RabbitMQ task publishing.
 - [ ] Reporting read model.
 - [ ] Metrics for throughput, consumer lag, retry count and failure rate.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
 - [x] Campaign API/persistence/security Testcontainers integration suite.
-- [ ] Container image build and Trivy scan in CI.
+- [x] Container image build and Trivy scan configured in CI.
 - [ ] Kubernetes deployment with k3d.
 
 ## Design constraints
 
 - Default delivery guarantee is at-least-once; consumers must be idempotent.
 - Ordering is scoped to a Kafka partition, not the entire system.
-- A message is not acknowledged before its side effect is completed.
+- A successful delivery is acknowledged after provider acceptance and database commit; a failed task is acknowledged after its retry/dead-letter handoff is durably committed.
 - Business data and an outbox record must be committed in the same database transaction.
 - A broker is selected according to message semantics, not convenience.
 - Local infrastructure is split into profiles to keep laptop resource usage manageable.
@@ -249,7 +251,9 @@ mvn -f backend/pom.xml clean verify
 - [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
 - [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
+- [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
+- [Notification Worker: providers, delivery state, acknowledgement, retry and DLQ](docs/notification-worker.md)
 
 ## Project status
 
-Campaign Service now implements create, CSV import, listing, start/schedule and transactional outbox persistence, backed by PostgreSQL integration tests. Local actor headers are development-only; production requires an external JWT issuer. Outbox publishing, delivery workers and the other services' business workflows remain pending.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. The opt-in `messaging` profile publishes Kafka events, consumes CampaignStarted into durable dispatch jobs and publishes personalized email/SMS tasks to RabbitMQ. Notification Service's `worker` profile consumes those tasks, sends email through SMTP/MailHog, simulates SMS, persists delivery state and handles bounded retry/DLQ handoffs with confirms. Integration tests cover PostgreSQL, Kafka, RabbitMQ and MailHog. Local actor headers are development-only; production requires an external JWT issuer. Delivery-result events, campaign completion aggregation, Reporting, Auth workflows and the frontend remain pending.

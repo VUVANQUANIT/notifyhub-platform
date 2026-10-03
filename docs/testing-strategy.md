@@ -108,7 +108,10 @@ Sau khi viết test, phải chạy test và nhìn thấy nó thất bại vì pr
 ### Messaging integration test
 
 - Phạm vi: outbox publisher, Kafka event, RabbitMQ task, retry, acknowledgement và idempotency.
-- Triển khai sau REST API và persistence; không cần làm trước domain core.
+- `MessagingPipelineIT` đã kiểm tra PostgreSQL, Kafka và RabbitMQ: routing email/SMS, batching,
+  concurrent publishing, duplicate replay, broker outage, unroutable returns, rollback sau ack và DLT.
+- `NotificationWorkerIT` kiểm tra PostgreSQL/RabbitMQ/MailHog thật: SMTP, simulated SMS,
+  deduplication, bounded retry, DLQ, provider outage, rollback/requeue và confirm recovery.
 
 ### End-to-end test
 
@@ -127,4 +130,8 @@ Một business rule được xem là hoàn thành khi:
 
 ## 7. Bước tiếp theo
 
-Application service, JPA/Flyway adapter, REST API và PostgreSQL Testcontainers đã được triển khai. Chạy `./mvnw clean verify` (Windows: `.\mvnw.cmd`) từ `backend` để chạy cả unit và integration test. Bước tiếp theo là kiểm thử outbox publisher/delivery worker với broker: duplicate event, publish failure, retry/backoff, dead letter và idempotent provider calls. Campaign RUNNING hiện mới ghi ý định bắt đầu vào outbox, chưa gửi email/SMS.
+Application service, JPA/Flyway adapter, REST API và pipeline Outbox → Kafka → RabbitMQ đã được triển khai.
+Chạy `./mvnw clean verify` (Windows: `.\mvnw.cmd`) từ `backend` để chạy unit và integration test với broker thật.
+Notification Worker đã có email MailHog/SMS giả lập, delivery state, duplicate task,
+manual acknowledgement, bounded retry và DLQ. Bước tiếp theo là phát delivery-result events,
+tổng hợp Campaign completion và Reporting; SMTP acceptance không bảo đảm mailbox delivery.
