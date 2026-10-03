@@ -105,8 +105,9 @@ CampaignCreated, CampaignScheduled, CampaignStarted, RecipientImportCompleted/Re
 `campaign.outbox_events` trong cùng transaction với business data. Envelope có event ID, type,
 version, tenant, campaign, occurredAt, correlationId và JSON payload. Correlation ID hiện do service sinh.
 Profile `messaging` bật publisher Kafka, dispatcher và publisher RabbitMQ; xem [Campaign messaging](campaign-messaging.md).
-RUNNING biểu thị đã ghi ý định bắt đầu và có thể đã đưa task vào queue; chưa có worker gửi email/SMS.
-Completion/failure được giữ trong domain cho bước tổng hợp kết quả delivery sau này.
+RUNNING biểu thị đã ghi ý định bắt đầu và có thể đã đưa task vào queue.
+[Notification Worker](notification-worker.md) gửi email/SMS và lưu delivery state; completion/failure
+của Campaign vẫn chờ bước tổng hợp kết quả delivery sau này.
 
 ## Kiểm chứng
 
