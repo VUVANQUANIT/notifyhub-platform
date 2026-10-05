@@ -1,5 +1,7 @@
 package com.vuvanquan.notifyhub.notification.worker;
 
+import com.vuvanquan.notifyhub.notification.events.ResultOutbox;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -19,9 +21,10 @@ public class DeliveryWorker {
     private final DeliveryPolicy policy;
     private final HandoffStore handoffs;
     private final Clock clock;
+    private final ResultOutbox results;
 
     public DeliveryWorker(JdbcTemplate jdbc, ObjectMapper json, EmailDeliveryProvider email,
-            SimulatedSmsProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock) {
+            SimulatedSmsProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock, ResultOutbox results) {
         this.jdbc = jdbc;
         this.json = json;
         this.email = email;
@@ -29,6 +32,7 @@ public class DeliveryWorker {
         this.policy = policy;
         this.handoffs = handoffs;
         this.clock = clock;
+        this.results = results;
     }
 
     @Transactional
@@ -90,10 +94,12 @@ public class DeliveryWorker {
             }
             return;
         }
+        Instant completedAt = DeliveryTime.now(clock);
         jdbc.update("""
                 UPDATE notification.deliveries SET status='SENT',attempts=?,next_attempt_at=NULL,
                 provider_reference=?,last_error=NULL,updated_at=?,completed_at=? WHERE notification_id=?
-                """, attempt, providerReference, Timestamp.from(DeliveryTime.now(clock)), Timestamp.from(DeliveryTime.now(clock)), task.notificationId());
+                """, attempt, providerReference, Timestamp.from(completedAt), Timestamp.from(completedAt), task.notificationId());
+        results.record(task, "SENT", attempt, providerReference, null, completedAt);
     }
 
     private void fail(SendNotificationTask task, byte[] payload, int attempt, String error, Instant at) {
@@ -102,6 +108,7 @@ public class DeliveryWorker {
                 last_error=?,updated_at=?,completed_at=? WHERE notification_id=?
                 """, attempt, error, Timestamp.from(at), Timestamp.from(at), task.notificationId());
         handoffs.failed(task, payload, attempt, error);
+        results.record(task, "FAILED", attempt, null, error, at);
     }
 
     private record State(String hash, String status, int attempts, Instant nextAttemptAt) {}

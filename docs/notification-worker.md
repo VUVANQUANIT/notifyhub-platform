@@ -8,11 +8,11 @@ Từ repository, bật PostgreSQL, RabbitMQ và MailHog; thêm Redpanda khi ch�
 rtk docker compose --profile kafka up -d postgres rabbitmq mailhog redpanda
 ```
 
-Từ `backend`, chạy hai terminal:
+Build toàn bộ backend trước để tạo JAR và library `event-contracts`. Từ `backend`, chạy hai terminal:
 
 ```powershell
-rtk proxy cmd.exe /d /c mvnw.cmd -pl campaign-service spring-boot:run "-Dspring-boot.run.profiles=local,messaging"
-rtk proxy cmd.exe /d /c mvnw.cmd -pl notification-service spring-boot:run "-Dspring-boot.run.profiles=local,worker"
+rtk proxy java -jar campaign-service/target/campaign-service-0.1.0-SNAPSHOT.jar --spring.profiles.active=local,messaging
+rtk proxy java -jar notification-service/target/notification-service-0.1.0-SNAPSHOT.jar --spring.profiles.active=local,worker,events
 ```
 
 Notification health: http://127.0.0.1:8083/actuator/health.
@@ -110,5 +110,6 @@ concurrent duplicates, retry/backoff, SMTP outage, attempt exhaustion, DLQ, unro
 task lỗi/identity conflict, transaction rollback với manual nack/redelivery và crash sau confirm.
 Không skip integration test khi Docker thiếu.
 
-Worker chưa phát Kafka delivery-result events hay tổng hợp Campaign completion: Campaign vẫn RUNNING
-cho đến bước tích hợp kết quả gửi và Reporting sau này.
+Worker ghi terminal result vào `notification.result_outbox` cùng transaction delivery state. Profile `events`
+phát kết quả Kafka để Campaign tổng hợp completion và Reporting cập nhật read model; xem
+[Delivery results và Reporting](delivery-results-reporting.md). Không bật `events` thì outbox giữ kết quả pending.

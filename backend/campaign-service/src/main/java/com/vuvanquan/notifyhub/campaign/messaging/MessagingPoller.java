@@ -11,9 +11,11 @@ public class MessagingPoller {
     private final OutboxPublisher outbox;
     private final CampaignDispatcher dispatcher;
     private final DeliveryTaskPublisher tasks;
+    private final CampaignCompletion completion;
 
-    public MessagingPoller(OutboxPublisher outbox, CampaignDispatcher dispatcher, DeliveryTaskPublisher tasks) {
+    public MessagingPoller(OutboxPublisher outbox, CampaignDispatcher dispatcher, DeliveryTaskPublisher tasks, CampaignCompletion completion) {
         this.outbox = outbox; this.dispatcher = dispatcher; this.tasks = tasks;
+        this.completion = completion;
     }
 
     @Scheduled(fixedDelayString = "${campaign.messaging.poll-delay-ms:1000}")
@@ -27,5 +29,10 @@ public class MessagingPoller {
     @Scheduled(fixedDelayString = "${campaign.messaging.poll-delay-ms:1000}")
     public void publishTasks() {
         for (int i = 0; i < 100 && !Thread.currentThread().isInterrupted(); i++) if (!tasks.publishOne()) break;
+    }
+
+    @Scheduled(fixedDelayString = "${campaign.messaging.poll-delay-ms:1000}")
+    public void completeCampaigns() {
+        for (int i = 0; i < 20 && !Thread.currentThread().isInterrupted(); i++) if (!completion.finalizeOne()) break;
     }
 }

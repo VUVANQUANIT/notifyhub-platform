@@ -39,6 +39,8 @@ campaign:
     polling-enabled: true
     topic: notifyhub.campaign.events.v1
     dead-letter-topic: notifyhub.campaign.events.v1.dlt
+    result-topic: notifyhub.notification.events.v1
+    result-dead-letter-topic: notifyhub.notification.events.v1.campaign.dlt
     partitions: 3
     replicas: 1
     batch-size: 100

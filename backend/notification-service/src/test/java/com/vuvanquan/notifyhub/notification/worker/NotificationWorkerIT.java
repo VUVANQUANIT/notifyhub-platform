@@ -1,6 +1,9 @@
 package com.vuvanquan.notifyhub.notification.worker;
 
 import com.rabbitmq.client.GetResponse;
+import com.vuvanquan.notifyhub.contracts.DeliveryResultEvent;
+import com.vuvanquan.notifyhub.notification.events.ResultPublisher;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.junit.jupiter.api.*;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
@@ -20,6 +23,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.kafka.KafkaContainer;
 import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.*;
@@ -34,12 +38,15 @@ import static org.mockito.Mockito.*;
 import static com.vuvanquan.notifyhub.notification.worker.WorkerConfiguration.*;
 
 @Testcontainers
-@ActiveProfiles({"local", "worker"})
+@ActiveProfiles({"local", "worker", "events"})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "notification.worker.polling-enabled=false", "notification.worker.max-attempts=3",
+        "notification.worker.polling-enabled=false", "notification.events.polling-enabled=false",
+        "notification.worker.max-attempts=3", "logging.level.org.apache.kafka=WARN",
         "notification.worker.initial-retry-delay=10s", "notification.worker.max-retry-delay=20s"})
 @Import(NotificationWorkerIT.TimeConfiguration.class)
 class NotificationWorkerIT {
+    @Container static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0")
+            .withEnv("KAFKA_LISTENERS", "PLAINTEXT://0.0.0.0:9092,BROKER://0.0.0.0:9093,CONTROLLER://localhost:9094");
     @Container static final PostgreSQLContainer DB = new PostgreSQLContainer("postgres:16-alpine");
     @Container static final GenericContainer<?> RABBIT = new GenericContainer<>("rabbitmq:3.13-management-alpine")
             .withEnv("RABBITMQ_DEFAULT_USER", "test").withEnv("RABBITMQ_DEFAULT_PASS", "test")
@@ -48,6 +55,7 @@ class NotificationWorkerIT {
             .withExposedPorts(1025, 8025).waitingFor(Wait.forHttp("/api/v2/messages").forPort(8025));
 
     @DynamicPropertySource static void config(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.datasource.url", DB::getJdbcUrl);
         registry.add("spring.datasource.username", DB::getUsername);
         registry.add("spring.datasource.password", DB::getPassword);
@@ -65,6 +73,7 @@ class NotificationWorkerIT {
     @Autowired ObjectMapper json;
     @Autowired DeliveryWorker worker;
     @Autowired HandoffPublisher publisher;
+    @Autowired ResultPublisher results;
     @Autowired NotificationTaskListener listener;
     @Autowired RabbitListenerEndpointRegistry listeners;
     @Autowired MutableClock clock;
@@ -77,7 +86,7 @@ class NotificationWorkerIT {
     @BeforeEach void resetState() throws Exception {
         listeners.stop();
         for (String queue : List.of(EMAIL_QUEUE, SMS_QUEUE, EMAIL_DLQ, SMS_DLQ)) amqp.purgeQueue(queue);
-        jdbc.execute("TRUNCATE notification.delivery_handoffs, notification.deliveries");
+        jdbc.execute("TRUNCATE notification.result_outbox, notification.delivery_handoffs, notification.deliveries");
         http.send(HttpRequest.newBuilder(mailUri("/api/v1/messages")).DELETE().build(), HttpResponse.BodyHandlers.discarding());
         reset(email, sms, AopTestUtils.getUltimateTargetObject(handoffs));
         clock.set(Instant.now());
@@ -97,6 +106,89 @@ class NotificationWorkerIT {
                 SELECT provider_reference IS NOT NULL AND completed_at IS NOT NULL AND next_attempt_at IS NULL
                 AND tenant_id=? AND campaign_id=? FROM notification.deliveries WHERE notification_id=?
                 """, Boolean.class, task.tenantId(), task.campaignId(), task.notificationId())).isTrue();
+        var envelope = jdbc.queryForObject("SELECT envelope::text FROM notification.result_outbox WHERE notification_id=?", String.class, task.notificationId());
+        assertThat(envelope).doesNotContain(task.destination(), task.body());
+        assertThat(json.readValue(envelope, DeliveryResultEvent.class).payload().status()).isEqualTo("SENT");
+    }
+
+    @Test void kafka_result_replays_same_identity_after_confirm_then_rollback_without_resending_email() throws Exception {
+        var task = task("EMAIL");
+        listeners.stop();
+        worker.deliver(json.writeValueAsBytes(task), "EMAIL");
+        var tx = new TransactionTemplate(transactions);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            assertThat(results.publishOne()).isTrue();
+            throw new IllegalStateException("Crash after Kafka ack before DB commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("SELECT published_at IS NULL FROM notification.result_outbox WHERE notification_id=?", Boolean.class, task.notificationId())).isTrue();
+        results.publishOne();
+        worker.deliver(json.writeValueAsBytes(task), "EMAIL");
+        var events = resultEvents(task, 2);
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0)).isEqualTo(events.get(1));
+        assertThat(events.getFirst().correlationId()).isEqualTo(task.correlationId());
+        verify(email, times(1)).send(any());
+    }
+
+    @Test void kafka_outage_keeps_result_pending_and_does_not_consume_provider_attempts() throws Exception {
+        var task = task("SMS");
+        listeners.stop();
+        worker.deliver(json.writeValueAsBytes(task), "SMS");
+        KAFKA.getDockerClient().pauseContainerCmd(KAFKA.getContainerId()).exec();
+        try {
+            results.publishOne();
+            assertThat(jdbc.queryForObject("""
+                    SELECT published_at IS NULL AND publish_attempts=1 AND last_error IS NOT NULL
+                    FROM notification.result_outbox WHERE notification_id=?
+                    """, Boolean.class, task.notificationId())).isTrue();
+        } finally { KAFKA.getDockerClient().unpauseContainerCmd(KAFKA.getContainerId()).exec(); }
+        jdbc.update("UPDATE notification.result_outbox SET next_attempt_at=now() WHERE notification_id=?", task.notificationId());
+        results.publishOne();
+        assertThat(resultEvents(task, 1).getFirst().payload().attempts()).isEqualTo(1);
+        verify(sms, times(1)).send(any());
+    }
+
+    @Test void delivery_and_result_outbox_rollback_together_and_final_failure_emits_only_one_result() throws Exception {
+        var task = task("EMAIL");
+        listeners.stop();
+        doThrow(new DeliveryFailure("InvalidMailMessage", false)).when(email).send(any());
+        var tx = new TransactionTemplate(transactions);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            worker.deliver(json.writeValueAsBytes(task), "EMAIL");
+            throw new IllegalStateException("Crash before transaction commit");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notification.result_outbox", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notification.deliveries", Long.class)).isZero();
+        worker.deliver(json.writeValueAsBytes(task), "EMAIL");
+        worker.deliver(json.writeValueAsBytes(task), "EMAIL");
+        results.publishOne();
+        var event = resultEvents(task, 1).getFirst();
+        assertThat(event.eventType()).isEqualTo("NotificationFailed");
+        assertThat(event.payload().failureCode()).isEqualTo("InvalidMailMessage");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notification.result_outbox", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notification.delivery_handoffs", Long.class)).isEqualTo(1);
+    }
+
+    private List<DeliveryResultEvent> resultEvents(SendNotificationTask task, int expected) {
+        try (var consumer = new KafkaConsumer<String, String>(Map.of(
+                "bootstrap.servers", KAFKA.getBootstrapServers(), "group.id", UUID.randomUUID().toString(),
+                "auto.offset.reset", "earliest", "enable.auto.commit", "false",
+                "key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer",
+                "value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer"))) {
+            consumer.subscribe(List.of("notifyhub.notification.events.v1"));
+            var events = new ArrayList<DeliveryResultEvent>();
+            await().atMost(Duration.ofSeconds(30)).until(() -> {
+                for (var record : consumer.poll(Duration.ofMillis(200))) {
+                    var event = json.readValue(record.value(), DeliveryResultEvent.class);
+                    if (event.payload().notificationId().equals(task.notificationId())) {
+                        assertThat(record.key()).isEqualTo(task.campaignId().toString());
+                        events.add(event);
+                    }
+                }
+                return events.size() >= expected;
+            });
+            return events;
+        }
     }
 
     @Test void concurrent_duplicate_tasks_and_json_whitespace_do_not_resend() throws Exception {

@@ -106,8 +106,9 @@ CampaignCreated, CampaignScheduled, CampaignStarted, RecipientImportCompleted/Re
 version, tenant, campaign, occurredAt, correlationId và JSON payload. Correlation ID hiện do service sinh.
 Profile `messaging` bật publisher Kafka, dispatcher và publisher RabbitMQ; xem [Campaign messaging](campaign-messaging.md).
 RUNNING biểu thị đã ghi ý định bắt đầu và có thể đã đưa task vào queue.
-[Notification Worker](notification-worker.md) gửi email/SMS và lưu delivery state; completion/failure
-của Campaign vẫn chờ bước tổng hợp kết quả delivery sau này.
+[Notification Worker](notification-worker.md) gửi email/SMS và ghi delivery-result outbox cùng transaction.
+Campaign tổng hợp kết quả Kafka và chuyển COMPLETED/FAILED khi mọi recipient có kết quả terminal;
+xem [Delivery results và Reporting](delivery-results-reporting.md).
 
 ## Kiểm chứng
 

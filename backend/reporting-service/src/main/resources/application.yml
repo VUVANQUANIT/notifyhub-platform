@@ -3,8 +3,24 @@ server:
 spring:
   application:
     name: reporting-service
+  datasource:
+    url: ${REPORTING_DB_URL}
+    username: ${REPORTING_DB_USERNAME}
+    password: ${REPORTING_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  flyway:
+    enabled: true
+    default-schema: reporting
+    schemas: reporting
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true

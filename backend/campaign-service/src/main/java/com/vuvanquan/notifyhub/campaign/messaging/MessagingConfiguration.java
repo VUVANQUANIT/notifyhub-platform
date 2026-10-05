@@ -12,7 +12,7 @@ import org.springframework.kafka.listener.*;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.util.backoff.FixedBackOff;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableKafka
 @EnableScheduling
 @ConditionalOnProperty(name = "campaign.messaging.enabled", havingValue = "true")
@@ -32,6 +32,24 @@ public class MessagingConfiguration {
         return new KafkaAdmin.NewTopics(
                 TopicBuilder.name(topic).partitions(partitions).replicas(replicas).build(),
                 TopicBuilder.name(dlt).partitions(partitions).replicas(replicas).build());
+    }
+
+    @Bean
+    KafkaAdmin.NewTopics deliveryResultTopics(
+            @Value("${campaign.messaging.result-topic:notifyhub.notification.events.v1}") String topic,
+            @Value("${campaign.messaging.result-dead-letter-topic:notifyhub.notification.events.v1.campaign.dlt}") String dlt,
+            @Value("${campaign.messaging.partitions:3}") int partitions,
+            @Value("${campaign.messaging.replicas:1}") int replicas) {
+        return new KafkaAdmin.NewTopics(
+                TopicBuilder.name(topic).partitions(partitions).replicas(replicas).build(),
+                TopicBuilder.name(dlt).partitions(partitions).replicas(replicas).build());
+    }
+
+    @Bean
+    ConcurrentKafkaListenerContainerFactory<Object, Object> resultListenerFactory(
+            ConsumerFactory<Object, Object> consumers, KafkaTemplate<Object, Object> template,
+            @Value("${campaign.messaging.result-dead-letter-topic:notifyhub.notification.events.v1.campaign.dlt}") String dlt) {
+        return campaignListenerFactory(consumers, template, dlt);
     }
 
     @Bean

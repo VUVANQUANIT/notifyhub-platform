@@ -203,6 +203,7 @@ mvn -f backend/pom.xml clean verify
 - [x] Pagination, status filtering and idempotent create/start commands.
 - [x] OpenAPI specification.
 - [x] PostgreSQL persistence, Flyway migrations and Campaign tenant isolation.
+- [x] Aggregate verified delivery results and finish campaigns after all recipients reach terminal state.
 
 ### Stage 4 - RabbitMQ delivery pipeline
 
@@ -218,7 +219,9 @@ mvn -f backend/pom.xml clean verify
 
 - [x] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
 - [x] Topic and partition configuration; CampaignStarted dispatcher consumer.
-- [ ] Consumer groups for reporting and audit.
+- [x] Durable Notification delivery-result outbox and confirmed Kafka publisher.
+- [x] Independent consumer groups for Campaign results and Reporting projections.
+- [ ] Audit consumer group.
 - [x] Dispatcher offset management, dead-letter topic and replay procedure.
 - [x] Dispatcher handling for duplicate events and independence from earlier event arrival.
 
@@ -226,7 +229,7 @@ mvn -f backend/pom.xml clean verify
 
 - [x] Transactional Outbox records and Kafka publisher in Campaign Service.
 - [x] Durable batched dispatch jobs and confirmed RabbitMQ task publishing.
-- [ ] Reporting read model.
+- [x] Reporting read model with tenant-scoped, paginated REST queries and JWT authorization.
 - [ ] Metrics for throughput, consumer lag, retry count and failure rate.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
 - [x] Campaign API/persistence/security Testcontainers integration suite.
@@ -252,8 +255,10 @@ mvn -f backend/pom.xml clean verify
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
 - [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
 - [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
+- [Delivery results, campaign completion and Reporting API](docs/delivery-results-reporting.md)
+- [Project progress and remaining work](docs/project-progress.md)
 - [Notification Worker: providers, delivery state, acknowledgement, retry and DLQ](docs/notification-worker.md)
 
 ## Project status
 
-Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. The opt-in `messaging` profile publishes Kafka events, consumes CampaignStarted into durable dispatch jobs and publishes personalized email/SMS tasks to RabbitMQ. Notification Service's `worker` profile consumes those tasks, sends email through SMTP/MailHog, simulates SMS, persists delivery state and handles bounded retry/DLQ handoffs with confirms. Integration tests cover PostgreSQL, Kafka, RabbitMQ and MailHog. Local actor headers are development-only; production requires an external JWT issuer. Delivery-result events, campaign completion aggregation, Reporting, Auth workflows and the frontend remain pending.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Integration tests cover PostgreSQL, Kafka, RabbitMQ, MailHog, replay, failure recovery and JWT authorization. Local actor headers are development-only; production requires an external JWT issuer. Auth workflows, frontend, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.
