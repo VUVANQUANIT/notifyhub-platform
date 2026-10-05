@@ -13,14 +13,14 @@ import org.springframework.security.web.SecurityFilterChain;
 public class ReportSecurity {
     @Bean @Profile("local")
     SecurityFilterChain local(HttpSecurity http) throws Exception {
-        return http.csrf(c -> c.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reports/**").permitAll().anyRequest().denyAll()).build();
     }
     @Bean @Profile("!local")
     SecurityFilterChain jwt(HttpSecurity http) throws Exception {
-        return http.csrf(c -> c.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAuthority("SCOPE_reports:read").anyRequest().denyAll())
