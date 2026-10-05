@@ -3,21 +3,28 @@ server:
 spring:
   application:
     name: api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          jwk-set-uri: ${JWT_JWK_SET_URI:${JWT_ISSUER_URI}/.well-known/jwks.json}
+          audiences: ${JWT_AUDIENCE:notifyhub}
   cloud:
     gateway:
       server:
         webflux:
           routes:
             - id: auth-service
-              uri: http://localhost:8081
+              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
               predicates:
-                - Path=/api/auth/**
+                - Path=/api/auth/**,/.well-known/jwks.json
             - id: campaign-service
-              uri: http://localhost:8082
+              uri: ${CAMPAIGN_SERVICE_URI:http://localhost:8082}
               predicates:
                 - Path=/api/campaigns/**
             - id: reporting-service
-              uri: http://localhost:8084
+              uri: ${REPORTING_SERVICE_URI:http://localhost:8084}
               predicates:
                 - Path=/api/reports/**
 management:

@@ -14,7 +14,7 @@ public class TenantResolver {
     private final boolean local;
     public TenantResolver(Environment environment) {
         local = environment.acceptsProfiles(Profiles.of("local"));
-        if (local && environment.acceptsProfiles(Profiles.of("prod"))) throw new IllegalStateException("local and prod cannot be combined");
+        if (local && environment.acceptsProfiles(Profiles.of("prod", "authenticated-local"))) throw new IllegalStateException("local cannot be combined with a JWT profile");
     }
     public UUID resolve(HttpServletRequest request, Authentication auth) {
         try {
