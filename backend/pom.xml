@@ -23,6 +23,7 @@
         <jackson-bom.version>3.1.7</jackson-bom.version>
     </properties>
     <modules>
+        <module>event-contracts</module>
         <module>api-gateway</module>
         <module>auth-service</module>
         <module>campaign-service</module>

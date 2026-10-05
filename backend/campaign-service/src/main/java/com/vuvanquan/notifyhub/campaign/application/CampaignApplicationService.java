@@ -225,6 +225,9 @@ public class CampaignApplicationService {
         event.payload.put("campaignId", campaign.id.toString());
         event.payload.put("status", campaign.status.name());
         event.payload.put("channel", campaign.channel.name());
+        if (type.equals("CampaignStarted")) {
+            event.payload.put("expected", recipients.countByTenantIdAndCampaignId(campaign.tenantId, campaign.id));
+        }
         outbox.save(event);
     }
 

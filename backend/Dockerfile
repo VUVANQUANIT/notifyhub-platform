@@ -7,6 +7,7 @@ WORKDIR /workspace/backend
 
 COPY backend/.mvn .mvn
 COPY backend/mvnw backend/pom.xml ./
+COPY backend/event-contracts/pom.xml event-contracts/pom.xml
 COPY backend/api-gateway/pom.xml api-gateway/pom.xml
 COPY backend/auth-service/pom.xml auth-service/pom.xml
 COPY backend/campaign-service/pom.xml campaign-service/pom.xml
@@ -14,12 +15,14 @@ COPY backend/notification-service/pom.xml notification-service/pom.xml
 COPY backend/reporting-service/pom.xml reporting-service/pom.xml
 
 RUN test -n "$MODULE" \
+    && sed -i 's/\r$//' mvnw \
     && chmod +x mvnw \
     && ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am dependency:go-offline
 
 COPY backend .
 
-RUN ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am -DskipTests package \
+RUN sed -i 's/\r$//' mvnw \
+    && ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am -DskipTests package \
     && cp "$MODULE"/target/"$MODULE"-*.jar /tmp/app.jar
 
 FROM eclipse-temurin:21-jre-jammy AS runtime

@@ -1,0 +1,22 @@
+name: notifyhub-results-smoke
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: notifyhub
+      POSTGRES_PASSWORD: notifyhub_local_password
+      POSTGRES_DB: notifyhub
+    ports: ['15432:5432']
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: notifyhub
+      RABBITMQ_DEFAULT_PASS: notifyhub_local_password
+    ports: ['15673:5672']
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports: ['11025:1025', '18025:8025']
+  kafka:
+    image: redpandadata/redpanda:v24.2.7
+    command: ['redpanda', 'start', '--overprovisioned', '--smp', '1', '--memory', '512M', '--reserve-memory', '0M', '--node-id', '0', '--check=false', '--kafka-addr', 'INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:19093', '--advertise-kafka-addr', 'INTERNAL://kafka:9092,OUTSIDE://localhost:19093']
+    ports: ['19093:19093']

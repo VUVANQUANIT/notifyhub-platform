@@ -2,6 +2,7 @@ package com.vuvanquan.notifyhub.campaign.messaging;
 
 import com.vuvanquan.notifyhub.campaign.application.*;
 import com.vuvanquan.notifyhub.campaign.domain.Channel;
+import com.vuvanquan.notifyhub.contracts.DeliveryResultEvent;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
@@ -66,9 +67,13 @@ class MessagingPipelineIT {
     @Autowired AmqpAdmin amqp;
     @Autowired ObjectMapper json;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired DeliveryResultInbox results;
+    @Autowired CampaignCompletion completion;
     Actor actor;
 
     @BeforeEach void setup() {
+        // Publishers intentionally drain all pending rows; keep each scenario's database isolated.
+        jdbc.execute("TRUNCATE campaign.campaigns CASCADE");
         actor = new Actor(UUID.randomUUID(), UUID.randomUUID());
         amqp.purgeQueue(EMAIL_QUEUE);
         amqp.purgeQueue(SMS_QUEUE);
@@ -125,6 +130,115 @@ class MessagingPipelineIT {
         assertThat(task.subject()).isNull();
         assertThat(task.body()).isEqualTo("Hello Quan");
         assertThat(rabbit.receive(EMAIL_QUEUE)).isNull();
+    }
+
+    @Test void campaign_waits_for_all_results_and_completes_once_despite_concurrent_replays() throws Exception {
+        UUID id = start(Channel.EMAIL, "email,name\na@example.com,A\nb@example.com,B\n");
+        publishEventsAndAwaitJob(id);
+        while (dispatcher.dispatchOneBatch()) {}
+        var events = resultEvents(id, "SENT");
+        results.accept(events.getFirst());
+        assertThat(campaignStatus(id)).isEqualTo("RUNNING");
+        try (var pool = Executors.newFixedThreadPool(4)) {
+            var tasks = new ArrayList<Callable<Void>>();
+            for (int i = 0; i < 8; i++) tasks.add(() -> { results.accept(events.getLast()); return null; });
+            for (var future : pool.invokeAll(tasks)) future.get();
+        }
+        results.accept(events.getFirst());
+        assertThat(campaignStatus(id)).isEqualTo("COMPLETED");
+        assertThat(count("delivery_results", id)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM campaign.outbox_events WHERE campaign_id=? AND event_type='CampaignCompleted'", Long.class, id)).isEqualTo(1);
+        assertThat(completion.finalizeOne()).isFalse();
+    }
+
+    @Test void failure_waits_for_remaining_recipients_then_commits_failed_campaign_and_outbox() {
+        UUID id = start(Channel.EMAIL, "email,name\na@example.com,A\nb@example.com,B\n");
+        publishEventsAndAwaitJob(id);
+        while (dispatcher.dispatchOneBatch()) {}
+        var failed = resultEvents(id, "FAILED");
+        results.accept(failed.getFirst());
+        assertThat(campaignStatus(id)).isEqualTo("RUNNING");
+        results.accept(resultEvents(id, "SENT").getLast());
+        assertThat(campaignStatus(id)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT payload::text FROM campaign.outbox_events WHERE campaign_id=? AND event_type='CampaignFailed'", String.class, id))
+                .contains("\"failed\": 1", "\"sent\": 1");
+    }
+
+    @Test void results_before_final_dispatch_batch_are_completed_by_sweep() {
+        UUID id = start(Channel.SMS, "phoneNumber,name\n+84901234567,A\n+84901234568,B\n");
+        publishEventsAndAwaitJob(id);
+        dispatcher.dispatchOneBatch(); // Exactly batchSize: completion is recorded by the next empty batch.
+        resultEvents(id, "SENT").forEach(results::accept);
+        assertThat(campaignStatus(id)).isEqualTo("RUNNING");
+        dispatcher.dispatchOneBatch();
+        assertThat(completion.finalizeOne()).isTrue();
+        assertThat(campaignStatus(id)).isEqualTo("COMPLETED");
+    }
+
+    @Test void rejects_wrong_tenant_unknown_notification_and_conflicting_terminal_result() {
+        UUID id = start(Channel.EMAIL, "email,name\na@example.com,A\n");
+        publishEventsAndAwaitJob(id);
+        while (dispatcher.dispatchOneBatch()) {}
+        var sent = resultEvents(id, "SENT").getFirst();
+        var forged = new DeliveryResultEvent(sent.eventId(), sent.eventType(), 1, UUID.randomUUID(), id,
+                sent.occurredAt(), sent.correlationId(), sent.payload());
+        assertThatThrownBy(() -> results.accept(forged)).isInstanceOf(IllegalArgumentException.class);
+        var unknown = new DeliveryResultEvent(UUID.randomUUID(), sent.eventType(), 1, actor.tenantId(), id,
+                sent.occurredAt(), sent.correlationId(), new DeliveryResultEvent.Payload(UUID.randomUUID(), sent.payload().recipientId(),
+                "EMAIL", "SENT", 1, "smtp-id", null));
+        assertThatThrownBy(() -> results.accept(unknown)).isInstanceOf(IllegalArgumentException.class);
+        results.accept(sent);
+        assertThatThrownBy(() -> results.accept(resultEvents(id, "FAILED").getFirst())).isInstanceOf(IllegalArgumentException.class);
+        assertThat(campaignStatus(id)).isEqualTo("COMPLETED");
+        assertThat(count("delivery_results", id)).isEqualTo(1);
+    }
+
+    @Test void result_consumer_commits_kafka_offset_only_after_completion_transaction() throws Exception {
+        UUID id = start(Channel.SMS, "phoneNumber,name\n+84901234567,A\n");
+        publishEventsAndAwaitJob(id);
+        while (dispatcher.dispatchOneBatch()) {}
+        var event = resultEvents(id, "SENT").getFirst();
+        var tx = new TransactionTemplate(transactions);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> {
+            results.accept(event);
+            throw new IllegalStateException("Database rollback");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(campaignStatus(id)).isEqualTo("RUNNING");
+        assertThat(count("delivery_results", id)).isZero();
+        kafka.send("notifyhub.notification.events.v1", id.toString(), json.writeValueAsString(event)).get(15, TimeUnit.SECONDS);
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertThat(campaignStatus(id)).isEqualTo("COMPLETED"));
+        assertThat(count("delivery_results", id)).isEqualTo(1);
+    }
+
+    @Test void accepts_worker_clock_skew_but_rejects_wrong_channel_and_correlation() {
+        UUID id = start(Channel.SMS, "phoneNumber,name\n+84901234567,A\n");
+        publishEventsAndAwaitJob(id);
+        while (dispatcher.dispatchOneBatch()) {}
+        var event = resultEvents(id, "SENT").getFirst();
+        var wrongCorrelation = new DeliveryResultEvent(event.eventId(), event.eventType(), 1, event.tenantId(), id,
+                event.occurredAt(), UUID.randomUUID(), event.payload());
+        assertThatThrownBy(() -> results.accept(wrongCorrelation)).isInstanceOf(IllegalArgumentException.class);
+        var wrongChannel = new DeliveryResultEvent(event.eventId(), event.eventType(), 1, event.tenantId(), id,
+                event.occurredAt(), event.correlationId(), new DeliveryResultEvent.Payload(event.payload().notificationId(),
+                event.payload().recipientId(), "EMAIL", "SENT", 1, "smtp-id", null));
+        assertThatThrownBy(() -> results.accept(wrongChannel)).isInstanceOf(IllegalArgumentException.class);
+        results.accept(new DeliveryResultEvent(event.eventId(), event.eventType(), 1, event.tenantId(), id,
+                event.occurredAt().minusSeconds(120), event.correlationId(), event.payload()));
+        assertThat(campaignStatus(id)).isEqualTo("COMPLETED");
+    }
+
+    private String campaignStatus(UUID id) {
+        return jdbc.queryForObject("SELECT status FROM campaign.campaigns WHERE id=?", String.class, id);
+    }
+
+    private List<DeliveryResultEvent> resultEvents(UUID id, String status) {
+        return jdbc.query("SELECT payload::text FROM campaign.delivery_tasks WHERE campaign_id=? ORDER BY recipient_id", (rs, row) -> {
+            var task = json.readValue(rs.getString(1), SendNotificationTask.class);
+            return new DeliveryResultEvent(UUID.randomUUID(), status.equals("SENT") ? "NotificationSent" : "NotificationFailed", 1,
+                    task.tenantId(), task.campaignId(), Instant.now(), task.correlationId(),
+                    new DeliveryResultEvent.Payload(task.notificationId(), task.recipientId(), task.channel(), status, 1,
+                            status.equals("SENT") ? "provider-id" : null, status.equals("FAILED") ? "SmtpUnavailable" : null));
+        }, id);
     }
 
     @Test void unroutable_rabbit_message_remains_pending_then_recovers() throws Exception {

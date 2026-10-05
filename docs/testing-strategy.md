@@ -133,5 +133,7 @@ Một business rule được xem là hoàn thành khi:
 Application service, JPA/Flyway adapter, REST API và pipeline Outbox → Kafka → RabbitMQ đã được triển khai.
 Chạy `./mvnw clean verify` (Windows: `.\mvnw.cmd`) từ `backend` để chạy unit và integration test với broker thật.
 Notification Worker đã có email MailHog/SMS giả lập, delivery state, duplicate task,
-manual acknowledgement, bounded retry và DLQ. Bước tiếp theo là phát delivery-result events,
-tổng hợp Campaign completion và Reporting; SMTP acceptance không bảo đảm mailbox delivery.
+manual acknowledgement, bounded retry và DLQ. Delivery-result outbox/Kafka, Campaign completion và Reporting
+đã có kiểm thử replay/concurrency, transaction rollback, broker outage, tenant isolation và JWT.
+`NotificationMigrationIT` kiểm tra backfill kết quả đã tồn tại; `scripts/smoke-delivery.ps1` kiểm tra luồng qua ba service.
+Bước tiếp theo là Auth issuer/workflows và frontend; SMTP acceptance không bảo đảm mailbox delivery.

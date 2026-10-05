@@ -86,8 +86,9 @@ Producer confirm không đồng nghĩa email/SMS đã được gửi.
 - Consumer kiểm tra campaign thuộc tenant và đang `RUNNING`; replay job đã tiếp nhận vẫn được bỏ qua
   an toàn nếu campaign đã kết thúc. Event chưa có job mà tham chiếu campaign không hợp lệ sẽ vào DLT.
 - RabbitMQ mất binding: publisher không đánh dấu published dù broker ack; sửa binding rồi chờ retry.
-- Job hoàn tất là đã tạo đủ task; task published là đã vào broker. Campaign vẫn `RUNNING` cho đến khi
-  có cơ chế tổng hợp kết quả delivery ở bước sau; worker đã lưu kết quả trong schema notification.
+- Job hoàn tất là đã tạo đủ task; task published là đã vào broker. Campaign nhận terminal result qua Kafka,
+  kiểm tra ownership với task của chính mình, và kết thúc khi mọi recipient có kết quả. Xem
+  [Delivery results và Reporting](delivery-results-reporting.md) để biết completion rules, DLT và recovery.
 
 SQL quan sát (read-only):
 
