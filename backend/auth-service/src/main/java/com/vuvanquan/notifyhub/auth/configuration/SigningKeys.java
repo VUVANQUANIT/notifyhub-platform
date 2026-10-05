@@ -46,7 +46,7 @@ public final class SigningKeys {
                 .replace("-----END PRIVATE KEY-----", "").replaceAll("\\s", ""));
         var factory = KeyFactory.getInstance("RSA");
         var privateKey = (RSAPrivateCrtKey) factory.generatePrivate(new PKCS8EncodedKeySpec(bytes));
-        if (privateKey.getModulus().bitLength() < 2048) throw new IllegalArgumentException("RSA key must be at least 2048 bits");
+        requireSecureModulus(privateKey.getModulus());
         var publicKey = (RSAPublicKey) factory.generatePublic(new RSAPublicKeySpec(privateKey.getModulus(), privateKey.getPublicExponent()));
         String kid = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(publicKey.getEncoded()));
         key = new RSAKey.Builder(publicKey).privateKey(privateKey).keyID(kid)
@@ -54,6 +54,9 @@ public final class SigningKeys {
     }
 
     public RSAKey signingKey() { return key; }
+    static void requireSecureModulus(java.math.BigInteger modulus) {
+        if (modulus.bitLength() < 2048) throw new IllegalArgumentException("RSA key must be at least 2048 bits");
+    }
     public RSAPublicKey publicKey() throws com.nimbusds.jose.JOSEException { return key.toRSAPublicKey(); }
     public java.util.Map<String, Object> publicJwks() { return new JWKSet(key.toPublicJWK()).toJSONObject(); }
 }

@@ -2,9 +2,7 @@ package com.vuvanquan.notifyhub.auth.configuration;
 
 import static org.assertj.core.api.Assertions.*;
 import java.nio.file.*;
-import java.security.KeyPairGenerator;
 import java.time.Duration;
-import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
@@ -23,11 +21,11 @@ class SigningKeysTest {
         assertThatThrownBy(() -> new SigningKeys(path, false)).isInstanceOf(NoSuchFileException.class);
         assertThat(path).doesNotExist();
     }
-    @Test void weak_rsa_key_is_rejected() throws Exception {
-        var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(1024);
-        var path = directory.resolve("weak.pem");
-        Files.writeString(path, "-----BEGIN PRIVATE KEY-----\n" + Base64.getEncoder().encodeToString(generator.generateKeyPair().getPrivate().getEncoded()) + "\n-----END PRIVATE KEY-----");
-        assertThatThrownBy(() -> new SigningKeys(path, false)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("2048");
+    @Test void weak_rsa_modulus_is_rejected_without_generating_a_weak_private_key() {
+        // Exercise the provisioning policy without creating insecure cryptographic material in the test suite.
+        assertThatThrownBy(() -> SigningKeys.requireSecureModulus(java.math.BigInteger.ONE.shiftLeft(1023)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("2048");
+        assertThatCode(() -> SigningKeys.requireSecureModulus(java.math.BigInteger.ONE.shiftLeft(2047))).doesNotThrowAnyException();
     }
     @Test void local_and_prod_cannot_be_combined() {
         var env = new MockEnvironment(); env.setActiveProfiles("local", "prod");
