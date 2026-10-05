@@ -21,12 +21,12 @@ Ngoài local, Spring Security yêu cầu JWT được xác minh. Profile `prod` 
 
 - `CAMPAIGN_DB_URL`: JDBC URL PostgreSQL.
 - `CAMPAIGN_DB_USERNAME`, `CAMPAIGN_DB_PASSWORD`: credential được cấp qua môi trường.
-- `JWT_ISSUER_URI`: issuer thật hỗ trợ discovery/JWK.
+- `JWT_ISSUER_URI`: issuer của Auth; `JWT_JWK_SET_URI` mặc định `${JWT_ISSUER_URI}/.well-known/jwks.json`, có thể trỏ tới Auth nội bộ.
 - `JWT_AUDIENCE`: mặc định `notifyhub`.
 - JWT: `sub` là user UUID, `tenant_id` là tenant UUID, `scope` chứa `campaigns:read` cho GET hoặc `campaigns:write` cho POST.
 
-Header tenant/user không được dùng ở production. Không bật đồng thời `local` và `prod`.
-Auth Service/issuer chưa được triển khai trong repository này; cấu hình prod cần issuer bên ngoài.
+Header tenant/user không được dùng ở production. Không kết hợp `local` với `prod` hoặc `authenticated-local`.
+Auth Service trong repository phát JWT/JWKS thật. Profile `authenticated-local` dùng DB defaults trên máy phát triển và yêu cầu JWT; xem [Auth runbook](auth-service.md) để chạy Auth/Gateway/Campaign/Reporting cùng nhau.
 Với môi trường có phân quyền DB riêng, chạy migration bằng tài khoản migration trước và cấp tài khoản runtime
 quyền SELECT/INSERT/UPDATE trên schema; không dùng tài khoản superuser local cho production.
 
