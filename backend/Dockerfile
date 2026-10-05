@@ -24,7 +24,10 @@ RUN ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am -DskipTests pac
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
 
-RUN groupadd --system --gid 1001 notifyhub \
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 notifyhub \
     && useradd --system --uid 1001 --gid notifyhub --home-dir /app --shell /usr/sbin/nologin notifyhub
 
 WORKDIR /app
