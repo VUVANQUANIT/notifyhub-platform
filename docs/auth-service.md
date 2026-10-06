@@ -4,7 +4,7 @@ Auth sở hữu schema PostgreSQL `auth`: tenant, user, role, refresh session v�
 
 ## Chạy trên máy phát triển
 
-Build bằng `backend/mvnw.cmd --batch-mode --no-transfer-progress clean verify` trong thư mục `backend`. Khởi động PostgreSQL bằng `docker compose up -d postgres`, rồi chạy mỗi lệnh trong một terminal, tại thư mục gốc repo:
+Build bằng `.\mvnw.cmd --batch-mode --no-transfer-progress clean verify` trong thư mục `backend`. Khởi động dependencies bằng `docker compose up -d postgres redis mailhog`, rồi chạy mỗi lệnh trong một terminal, tại thư mục gốc repo:
 
 ```powershell
 java -jar backend/auth-service/target/auth-service-0.1.0-SNAPSHOT.jar --spring.profiles.active=local
@@ -36,6 +36,8 @@ Các POST/PUT nhận `application/json`; token được trả trong JSON, không
 | POST `/api/auth/login` | Public | `tenantSlug`, `email`, `password`; sai/thiếu/disabled trả cùng lỗi 401 |
 | POST `/api/auth/refresh` | Opaque credential trong body | `refreshToken`; trả access/refresh mới |
 | POST `/api/auth/logout` | Opaque credential trong body | `refreshToken`; revoke cả session, trả 204, idempotent với credential hợp lệ về định dạng |
+| POST `/api/auth/password/forgot` | Public, Redis limits | `tenantSlug`, `email`; trả 202 chung với `challengeId`; email OTP qua outbox |
+| POST `/api/auth/password/reset` | OTP body credential, Redis limits | `challengeId`, `code` 8 chữ số, `password`; trả 204, đổi mật khẩu và revoke refresh sessions |
 | GET `/api/auth/me` | JWT | User hiện tại, DB kiểm tra user/tenant enabled |
 | GET `/api/auth/tenant` | JWT | Tenant hiện tại |
 | GET `/api/auth/users?page=0&size=20` | ADMIN, `users:read` | Danh sách chỉ trong tenant, size 1..100 |
@@ -78,6 +80,7 @@ Logout, demotion và disable thu hồi refresh ngay. Campaign/Reporting chỉ ki
 ## Cấu hình môi trường chung
 
 - Auth: `AUTH_DB_URL`, `AUTH_DB_USERNAME`, `AUTH_DB_PASSWORD`, `AUTH_SIGNING_KEY_PATH`, `JWT_ISSUER_URI`, `JWT_AUDIENCE`.
+- Auth controls: `AUTH_CONTROL_SECRET_PATH`, Redis/SMTP connection settings; local có defaults và tạo secret file được Git ignore. Ngoài local phải provision control secret riêng. Xem [rate limiting và OTP recovery](auth-controls.md) để cấu hình quotas, proxy IP, mail outbox và reset.
 - Gateway/Campaign/Reporting: `JWT_ISSUER_URI`, `JWT_AUDIENCE`; `JWT_JWK_SET_URI` có thể là URL Auth nội bộ. Mặc định production JWK URI là `${JWT_ISSUER_URI}/.well-known/jwks.json`; không cần discovery server khi khởi động.
 - Gateway upstream: `AUTH_SERVICE_URI`, `CAMPAIGN_SERVICE_URI`, `REPORTING_SERVICE_URI`.
 - Production Auth yêu cầu issuer HTTPS và file private key PKCS#8 PEM RSA ít nhất 2048 bits đã được provision ngoài app. Mount read-only, giới hạn quyền file/ACL cho service account. Auth không tự sinh key ngoài `local`; không commit key.
@@ -88,4 +91,4 @@ Logout, demotion và disable thu hồi refresh ngay. Campaign/Reporting chỉ ki
 
 Unit tests kiểm tra normalization/password/admin invariant và key persistence/weak key/prod safeguards. PostgreSQL + HTTP integration tests kiểm tra JWT/JWKS thật, sai issuer/audience/signature/expiry, generic login failure, tenant isolation, RBAC, last-admin concurrency, refresh rotation/replay/concurrency/rollback/expiry, disable, logout, JSON-only credentials và no-session/no-store. Gateway integration tests tải JWKS từ một HTTP upstream thật và kiểm chữ ký/issuer/audience/expiry/scope.
 
-Chưa triển khai Redis OTP/rate limiting, password reset/change, invitation, audit identity event/outbox, rotation nhiều signing key hoặc refresh-history cleanup job. Trước triển khai chung cần rate limiting ở edge/Auth và secret provisioning. Refresh history không chứa raw token, nhưng cần retention/cleanup cho expired sessions; không xóa consumed hash của session còn hạn. Frontend/token storage vẫn là hạng mục tiếp theo.
+Redis rate limiting và OTP password reset qua email đã triển khai; xem [Auth controls](auth-controls.md). Login MFA, xác minh email khi đăng ký, đổi password bằng password hiện tại, invitation, audit identity events, rotation nhiều signing key và history cleanup job còn pending. Trước triển khai chung cần provision RSA/control secrets, Redis/SMTP với ACL/TLS/network isolation phù hợp và cấu hình trusted proxy chính xác. History cần retention/cleanup cho expired sessions; không xóa consumed hash hoặc challenge còn hạn. Frontend/token storage vẫn là hạng mục tiếp theo.

@@ -150,7 +150,7 @@ public class IdentityService {
             int admins = db.queryForObject("SELECT count(*) FROM auth.users WHERE tenant_id=? AND role='ADMIN' AND enabled", Integer.class, actor.tenantId());
             try { IdentityRules.keepAdmin(user.role(), user.enabled(), nextRole, nextEnabled, admins); }
             catch (IllegalStateException lastAdmin) { throw new AuthFailure(HttpStatus.CONFLICT, lastAdmin.getMessage()); }
-            db.update("UPDATE auth.users SET role=?,enabled=? WHERE tenant_id=? AND id=?", nextRole.name(), nextEnabled, actor.tenantId(), userId);
+            db.update("UPDATE auth.users SET role=?,enabled=?,recovery_version=recovery_version+1 WHERE tenant_id=? AND id=?", nextRole.name(), nextEnabled, actor.tenantId(), userId);
             db.update("UPDATE auth.refresh_sessions SET revoked_at=? WHERE tenant_id=? AND user_id=? AND revoked_at IS NULL",
                     Timestamp.from(clock.instant()), actor.tenantId(), userId);
             return findUser(actor.tenantId(), userId).view();

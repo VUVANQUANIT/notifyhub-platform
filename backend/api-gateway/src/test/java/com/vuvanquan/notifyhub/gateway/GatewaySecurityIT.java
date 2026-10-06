@@ -62,6 +62,11 @@ class GatewaySecurityIT {
         assertThat(request("PUT", "/api/auth/users/123/role", admin).statusCode()).isEqualTo(200);
         assertThat(request("GET", "/api/auth/me", viewer).headers().allValues("Set-Cookie")).isEmpty();
     }
+    @Test void recovery_credentials_are_public_json_routes_without_opening_member_administration() throws Exception {
+        assertThat(request("POST", "/api/auth/password/forgot", null).statusCode()).isEqualTo(200);
+        assertThat(request("POST", "/api/auth/password/reset", null).statusCode()).isEqualTo(200);
+        assertThat(request("GET", "/api/auth/users", null).statusCode()).isEqualTo(401);
+    }
     private HttpResponse<String> request(String method, String path, String token) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).header("X-Tenant-Id", UUID.randomUUID().toString());
         if (token != null) request.header("Authorization", "Bearer " + token);
