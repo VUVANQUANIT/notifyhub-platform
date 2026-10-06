@@ -1,5 +1,8 @@
 name: notifyhub-results-smoke
 services:
+  redis:
+    image: redis:7-alpine
+    ports: ['16379:6379']
   postgres:
     image: postgres:16-alpine
     environment:
