@@ -12,7 +12,8 @@ public class SecurityConfiguration {
     @Bean
     @Profile("local")
     SecurityFilterChain localSecurity(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
+        // Development actor headers are accepted only on the loopback-bound local server.
+        return http.csrf(csrf -> csrf.ignoringRequestMatchers("/api/campaigns", "/api/campaigns/**"))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
@@ -23,8 +24,7 @@ public class SecurityConfiguration {
     @Bean
     @Profile("!local")
     SecurityFilterChain jwtSecurity(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/campaigns", "/api/campaigns/**")

@@ -136,4 +136,4 @@ Notification Worker đã có email MailHog/SMS giả lập, delivery state, dupl
 manual acknowledgement, bounded retry và DLQ. Delivery-result outbox/Kafka, Campaign completion và Reporting
 đã có kiểm thử replay/concurrency, transaction rollback, broker outage, tenant isolation và JWT.
 `NotificationMigrationIT` kiểm tra backfill kết quả đã tồn tại; `scripts/smoke-delivery.ps1` kiểm tra luồng qua ba service.
-Bước tiếp theo là Auth issuer/workflows và frontend; SMTP acceptance không bảo đảm mailbox delivery.
+Auth/JWT có 22 tests về tenant/user/role, signing-key safeguards, JWT/JWKS, refresh rotation/replay/concurrency/rollback và last-admin protection. Gateway có 4 integration tests tải JWKS qua HTTP thật để kiểm JWT và scope. `scripts/smoke-auth.ps1` đã qua 23 checks với bốn JAR riêng, xác thực token do Auth phát hành ở Gateway và service trực tiếp. Full backend `clean verify` chạy 151 tests, không failure/error/skipped. Bước tiếp theo là Redis OTP/rate limiting và frontend; SMTP acceptance không bảo đảm mailbox delivery.

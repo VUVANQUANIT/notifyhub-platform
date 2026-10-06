@@ -80,7 +80,7 @@ All routes are GET and tenant scoped:
 
 Page is non-negative; size is 1..100. Delivery filter accepts `SENT`/`FAILED`. A missing report or another tenant's campaign returns 404. API results do not expose destination, message content or provider reference. Reporting creates a read model only for started/delivered campaigns, not a second authoritative Campaign database.
 
-Local profile binds loopback and accepts UUID `X-Tenant-Id`/`X-User-Id` headers. Outside local, a valid JWT with UUID subject, UUID `tenant_id` and scope `reports:read` is required; tenant headers are ignored. Configure `REPORTING_DB_URL`, `REPORTING_DB_USERNAME`, `REPORTING_DB_PASSWORD`, Kafka connectivity and `JWT_ISSUER_URI` for `prod,messaging`. Local and prod cannot be combined. These resource-server checks do not replace the still-pending Auth issuer, user/role workflows or refresh-token rotation.
+Local profile binds loopback and accepts UUID `X-Tenant-Id`/`X-User-Id` headers. Outside local, a valid JWT with UUID subject, UUID `tenant_id` and scope `reports:read` is required; tenant headers are ignored. Configure `REPORTING_DB_URL`, `REPORTING_DB_USERNAME`, `REPORTING_DB_PASSWORD`, Kafka connectivity, `JWT_ISSUER_URI`, `JWT_AUDIENCE` and optionally `JWT_JWK_SET_URI` for `prod,messaging`. Do not combine local with prod or authenticated-local. Repository Auth now supplies the JWT/JWKS issuer, tenant/user roles and refresh lifecycle; [the Auth runbook](auth-service.md) explains authenticated-local and Gateway integration.
 
 Example against local services:
 

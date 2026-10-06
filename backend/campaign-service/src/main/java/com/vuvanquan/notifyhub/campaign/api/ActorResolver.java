@@ -16,8 +16,8 @@ public class ActorResolver {
     private final boolean local;
     public ActorResolver(Environment environment) {
         local = environment.acceptsProfiles(Profiles.of("local"));
-        if (local && environment.acceptsProfiles(Profiles.of("prod"))) {
-            throw new IllegalStateException("Profiles local and prod must not be combined");
+        if (local && environment.acceptsProfiles(Profiles.of("prod", "authenticated-local"))) {
+            throw new IllegalStateException("Profile local cannot be combined with a JWT profile");
         }
     }
 

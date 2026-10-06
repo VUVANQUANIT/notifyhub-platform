@@ -3,8 +3,31 @@ server:
 spring:
   application:
     name: auth-service
+  datasource:
+    url: ${AUTH_DB_URL}
+    username: ${AUTH_DB_USERNAME}
+    password: ${AUTH_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  flyway:
+    enabled: true
+    default-schema: auth
+    schemas: auth
+auth:
+  issuer: ${JWT_ISSUER_URI}
+  signing-key-path: ${AUTH_SIGNING_KEY_PATH}
+  registration-enabled: ${AUTH_REGISTRATION_ENABLED:false}
+  audience: ${JWT_AUDIENCE:notifyhub}
+  access-ttl: 5m
+  refresh-ttl: 7d
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
