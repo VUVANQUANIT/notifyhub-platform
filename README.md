@@ -162,6 +162,18 @@ docker compose --profile kafka up -d
 mvn -f backend/pom.xml clean verify
 ```
 
+### Start the web client
+
+With Auth/Gateway running as described in [the Auth runbook](docs/auth-service.md), use Node 24.19+ and npm 11+:
+
+```powershell
+cd frontend
+npm ci
+npm start
+```
+
+Open `http://127.0.0.1:4200`. Login, refresh, logout and email password recovery use Gateway through a same-origin development proxy. Sessions stay in memory; reloading requires login again. See [the frontend runbook](frontend/README.md) for tests and production reverse-proxy requirements.
+
 ### Local endpoints
 
 | Component | Endpoint |
@@ -263,4 +275,4 @@ mvn -f backend/pom.xml clean verify
 
 ## Project status
 
-Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. Frontend, login MFA, email verification, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. The Angular frontend implements login/logout, serialized refresh, email recovery and a protected account/tenant overview. Frontend campaign/import/reporting screens, login MFA, email verification, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.

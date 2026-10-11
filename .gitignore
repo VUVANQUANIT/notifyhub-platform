@@ -17,6 +17,8 @@ target/
 node_modules/
 dist/
 .angular/
+playwright-report/
+test-results/
 
 # OS
 .DS_Store

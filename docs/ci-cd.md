@@ -32,6 +32,7 @@ SemVer tag (vX.Y.Z)
 - Builds every service image through the shared `backend/Dockerfile`.
 - Rejects images with fixed HIGH or CRITICAL vulnerabilities.
 - Reviews newly introduced dependencies and rejects AGPL/GPL dependencies.
+- `Frontend verify` uses the Node version pinned in `frontend/.nvmrc` to install the lockfile, build Angular, run session unit tests and test browser flows with Chromium. The browser suite uses synthetic API responses; `scripts/smoke-auth-browser.ps1` separately exercises real Gateway/Auth and PostgreSQL/Redis/MailHog locally.
 
 ### CodeQL
 
