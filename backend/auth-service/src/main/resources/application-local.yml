@@ -1,6 +1,11 @@
 server:
   address: 127.0.0.1
 spring:
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST:127.0.0.1}
+  mail:
+    host: ${AUTH_SMTP_HOST:127.0.0.1}
   datasource:
     url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/notifyhub}
     username: ${AUTH_DB_USERNAME:notifyhub}
@@ -9,3 +14,5 @@ auth:
   issuer: ${JWT_ISSUER_URI:http://127.0.0.1:8081}
   signing-key-path: ${AUTH_SIGNING_KEY_PATH:.env.auth-local-private.pem}
   registration-enabled: ${AUTH_REGISTRATION_ENABLED:true}
+  control:
+    secret-path: ${AUTH_CONTROL_SECRET_PATH:.env.auth-control-secret}

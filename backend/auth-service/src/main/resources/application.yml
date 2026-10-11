@@ -1,5 +1,6 @@
 server:
   port: 8081
+  forward-headers-strategy: none
 spring:
   application:
     name: auth-service
@@ -14,6 +15,25 @@ spring:
     enabled: true
     default-schema: auth
     schemas: auth
+  data:
+    redis:
+      host: ${AUTH_REDIS_HOST}
+      port: ${AUTH_REDIS_PORT:6379}
+      password: ${AUTH_REDIS_PASSWORD:}
+      timeout: 1s
+      connect-timeout: 1s
+  mail:
+    host: ${AUTH_SMTP_HOST}
+    port: ${AUTH_SMTP_PORT:1025}
+    username: ${AUTH_SMTP_USERNAME:}
+    password: ${AUTH_SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${AUTH_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${AUTH_SMTP_STARTTLS:false}
+      mail.smtp.starttls.required: ${AUTH_SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 2000
+      mail.smtp.timeout: 2000
+      mail.smtp.writetimeout: 2000
 auth:
   issuer: ${JWT_ISSUER_URI}
   signing-key-path: ${AUTH_SIGNING_KEY_PATH}
@@ -21,6 +41,23 @@ auth:
   audience: ${JWT_AUDIENCE:notifyhub}
   access-ttl: 5m
   refresh-ttl: 7d
+  control:
+    secret-path: ${AUTH_CONTROL_SECRET_PATH}
+    trusted-proxy-addresses: ${AUTH_TRUSTED_PROXY_ADDRESSES:}
+    requests: {limit: 120, window: 1m}
+    login: {limit: 10, window: 15m}
+    refresh: {limit: 30, window: 1m}
+    reset: {limit: 10, window: 1m}
+    otp:
+      ttl: 5m
+      attempts: 5
+      resend-cooldown: 1m
+      requests: {limit: 3, window: 15m}
+      ip-requests: {limit: 10, window: 15m}
+      mail-attempts: 4
+    mail-from: ${AUTH_MAIL_FROM:no-reply@notifyhub.local}
+    mail-poll-enabled: true
+    mail-poll-delay: 1000
 management:
   endpoints:
     web:

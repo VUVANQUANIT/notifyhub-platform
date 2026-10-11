@@ -12,7 +12,7 @@ import org.springframework.security.web.server.util.matcher.*;
 
 @Configuration
 public class GatewaySecurity {
-    private static final String[] PUBLIC_AUTH = {"/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout"};
+    private static final String[] PUBLIC_AUTH = {"/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset"};
     @Bean SecurityWebFilterChain security(ServerHttpSecurity http) {
         // Only JSON body credentials and Authorization bearer credentials are supported; no cookie authentication.
         ServerWebExchangeMatcher bearer = exchange -> {

@@ -13,11 +13,11 @@ public class AuthSecurity {
     @Bean SecurityFilterChain security(HttpSecurity http) throws Exception {
         return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // These endpoints consume JSON and explicit body credentials, never cookies or browser sessions.
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset"))
                 .authorizeHttpRequests(requests -> requests
                         .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/.well-known/jwks.json", "/actuator/health", "/actuator/health/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/users").hasAuthority("SCOPE_users:read")
                         .requestMatchers("/api/auth/users/**").hasAuthority("SCOPE_users:write")
                         .requestMatchers("/api/auth/**").authenticated()

@@ -21,21 +21,30 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.*;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @Testcontainers
 @ActiveProfiles("local")
+@DirtiesContext(classMode=DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class IdentityIT {
     @Container static final PostgreSQLContainer DB = new PostgreSQLContainer("postgres:16-alpine");
+    @Container static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
     static final String KEY_PATH = keyPath();
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", DB::getJdbcUrl);
         registry.add("spring.datasource.username", DB::getUsername);
         registry.add("spring.datasource.password", DB::getPassword);
         registry.add("auth.signing-key-path", () -> KEY_PATH);
+        registry.add("auth.control.secret-path", () -> KEY_PATH + ".control");
+        registry.add("auth.control.mail-poll-enabled", () -> false);
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
     @LocalServerPort int port;
     @Autowired IdentityService service;
@@ -43,11 +52,13 @@ class IdentityIT {
     @Autowired JwtDecoder decoder;
     @Autowired JwtEncoder encoder;
     @Autowired SigningKeys keys;
+    @Autowired StringRedisTemplate redis;
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient client = HttpClient.newHttpClient();
     private static final String PASSWORD = "correct horse battery staple";
 
     @BeforeEach void reset() {
+        try (var connection = redis.getConnectionFactory().getConnection()) { connection.serverCommands().flushDb(); }
         db.execute("DROP TRIGGER IF EXISTS reject_refresh ON auth.refresh_tokens");
         db.execute("TRUNCATE auth.refresh_tokens,auth.refresh_sessions,auth.users,auth.tenants CASCADE");
     }
@@ -236,5 +247,5 @@ class IdentityIT {
     private static String keyPath() {
         try { return Files.createTempDirectory("notifyhub-auth-it").resolve("private.pem").toString(); } catch (Exception failure) { throw new IllegalStateException(failure); }
     }
-    @AfterAll static void removeKey() throws Exception { Files.deleteIfExists(java.nio.file.Path.of(KEY_PATH)); Files.deleteIfExists(java.nio.file.Path.of(KEY_PATH).getParent()); }
+    @AfterAll static void removeKey() throws Exception { Files.deleteIfExists(java.nio.file.Path.of(KEY_PATH + ".control")); Files.deleteIfExists(java.nio.file.Path.of(KEY_PATH)); Files.deleteIfExists(java.nio.file.Path.of(KEY_PATH).getParent()); }
 }

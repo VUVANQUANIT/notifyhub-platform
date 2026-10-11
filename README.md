@@ -194,7 +194,7 @@ mvn -f backend/pom.xml clean verify
 - [x] JWT access token and refresh-token rotation.
 - [x] Tenant context propagation through the request boundary.
 - [x] Database isolation tests.
-- [ ] Redis-backed OTP and rate limiting.
+- [x] Redis-backed password-recovery OTP and Auth rate limiting.
 
 ### Stage 3 - Campaign API
 
@@ -254,6 +254,7 @@ mvn -f backend/pom.xml clean verify
 - [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
 - [Auth: JWT/JWKS, tenants, users, roles and refresh lifecycle](docs/auth-service.md)
+- [Auth controls: Redis rate limiting, recovery OTP and email outbox](docs/auth-controls.md)
 - [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
 - [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
 - [Delivery results, campaign completion and Reporting API](docs/delivery-results-reporting.md)
@@ -262,4 +263,4 @@ mvn -f backend/pom.xml clean verify
 
 ## Project status
 
-Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS and refresh rotation/replay revocation. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. The full backend suite has 151 tests, and a four-JAR smoke verifies real Auth tokens through Gateway and direct service calls. Redis OTP/rate limiting, password recovery, frontend, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. Frontend, login MFA, email verification, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.

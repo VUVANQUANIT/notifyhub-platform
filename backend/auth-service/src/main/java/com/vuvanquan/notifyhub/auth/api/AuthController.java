@@ -20,7 +20,10 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final IdentityService identities;
     private final SigningKeys keys;
-    public AuthController(IdentityService identities, SigningKeys keys) { this.identities = identities; this.keys = keys; }
+    private final com.vuvanquan.notifyhub.auth.control.RedisControls controls;
+    private final com.vuvanquan.notifyhub.auth.control.ControlProperties config;
+    public AuthController(IdentityService identities, SigningKeys keys, com.vuvanquan.notifyhub.auth.control.RedisControls controls,
+            com.vuvanquan.notifyhub.auth.control.ControlProperties config) { this.identities = identities; this.keys = keys; this.controls = controls; this.config = config; }
 
     @GetMapping("/.well-known/jwks.json") Map<String, Object> jwks() { return keys.publicJwks(); }
     @PostMapping(value = "/api/auth/register", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -28,9 +31,15 @@ public class AuthController {
         return identities.register(request.tenantSlug(), request.tenantName(), request.email(), request.displayName(), request.password());
     }
     @PostMapping(value = "/api/auth/login", consumes = MediaType.APPLICATION_JSON_VALUE)
-    Tokens login(@Valid @RequestBody Login request) { return identities.login(request.tenantSlug(), request.email(), request.password()); }
+    Tokens login(@Valid @RequestBody Login request) {
+        controls.rate("login-account", com.vuvanquan.notifyhub.auth.control.PasswordRecovery.account(request.tenantSlug(), request.email()), config.login());
+        return identities.login(request.tenantSlug(), request.email(), request.password());
+    }
     @PostMapping(value = "/api/auth/refresh", consumes = MediaType.APPLICATION_JSON_VALUE)
-    Tokens refresh(@Valid @RequestBody Refresh request) { return identities.refresh(request.refreshToken()); }
+    Tokens refresh(@Valid @RequestBody Refresh request) {
+        controls.rate("refresh-token", request.refreshToken(), config.refresh());
+        return identities.refresh(request.refreshToken());
+    }
     @PostMapping(value = "/api/auth/logout", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     void logout(@Valid @RequestBody Refresh request) { identities.logout(request.refreshToken()); }

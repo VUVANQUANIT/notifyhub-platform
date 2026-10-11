@@ -13,6 +13,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class AuthErrors {
+    @ExceptionHandler(com.vuvanquan.notifyhub.auth.control.ControlFailure.class)
+    ResponseEntity<ProblemDetail> control(com.vuvanquan.notifyhub.auth.control.ControlFailure error) {
+        return ResponseEntity.status(error.status()).header("Retry-After", Long.toString(error.retryAfter()))
+                .body(ProblemDetail.forStatusAndDetail(error.status(), error.getMessage()));
+    }
     @ExceptionHandler(AuthFailure.class) ResponseEntity<ProblemDetail> auth(AuthFailure error) {
         var response = ResponseEntity.status(error.status());
         if (error.status() == HttpStatus.UNAUTHORIZED) response.header(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
