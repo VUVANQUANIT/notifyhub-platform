@@ -21,6 +21,7 @@
         <tomcat.version>11.0.25</tomcat.version>
         <!-- Patched Jackson 3 baseline required by the HIGH/CRITICAL container scan. -->
         <jackson-bom.version>3.1.7</jackson-bom.version>
+        <lz4-java.version>1.11.4</lz4-java.version>
     </properties>
     <modules>
         <module>event-contracts</module>
@@ -32,6 +33,12 @@
     </modules>
     <dependencyManagement>
         <dependencies>
+            <!-- Kafka brings 1.10.1 transitively; 1.11.4 patches CVE-2026-106451. -->
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>

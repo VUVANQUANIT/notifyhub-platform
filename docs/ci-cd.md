@@ -93,3 +93,5 @@ Infrastructure manifests and the deployment adapter should live in a separate co
 ## Dependency maintenance
 
 Dependabot checks Maven dependencies, GitHub Actions and the Docker base image weekly. Keep these updates small and let the same CI/security gates verify them.
+
+The backend parent manages `at.yawk.lz4:lz4-java` at `1.11.4`, overriding Kafka's transitive `1.10.1`. The container gate detected CVE-2026-106451 in Campaign, Notification and Reporting; the [maintainer advisory](https://github.com/yawkat/lz4-java/security/advisories/GHSA-mcr4-qmvw-px4g) identifies `1.11.4` as patched. Keep the override until the managed Kafka dependency includes a patched release.
