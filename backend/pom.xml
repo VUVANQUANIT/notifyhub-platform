@@ -24,6 +24,7 @@
     </properties>
     <modules>
         <module>event-contracts</module>
+        <module>monitoring</module>
         <module>api-gateway</module>
         <module>auth-service</module>
         <module>campaign-service</module>

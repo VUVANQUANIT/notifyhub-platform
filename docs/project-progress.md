@@ -1,8 +1,8 @@
-# Tiến độ NotifyHub — 06/10/2026
+# Tiến độ NotifyHub — 13/10/2026
 
 ## Phạm vi đánh giá
 
-Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11 đã merge vào `develop`, gồm Campaign, Worker, delivery results, Reporting và Auth/JWT. Nhánh `quanvv/auth-rate-limit-otp` bổ sung Redis controls và email OTP password recovery; phần bổ sung cần review và merge trước khi xem là đã tích hợp vào `develop`.
+Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11/#12 đã merge vào `develop`, gồm Campaign, Worker, delivery results, Reporting và Auth/JWT. Redis controls và email OTP password recovery đã tích hợp vào `develop` qua PR #12. Monitoring được bổ sung trên nhánh `quanvv/monitoring`; cần merge nhánh này để tích hợp vào `develop`.
 
 ## Hạng mục
 
@@ -12,9 +12,9 @@
 | Campaign | Hoàn thành luồng chính | Domain/state machine, CSV, API tenant-scoped, PostgreSQL/Flyway, idempotency, lịch chạy, outbox/dispatch; completion khi mọi recipient có kết quả |
 | Delivery | Hoàn thành local MVP | RabbitMQ manual ack, SMTP/MailHog, SMS giả lập, durable retry/DLQ, dedup, kết quả Kafka; chưa có provider SMS thật hoặc redrive admin API |
 | Reporting | Hoàn thành read model MVP | Kafka projection, trạng thái/counters, API phân trang và lọc, tenant/JWT checks; eventual consistency, chưa có UI |
-| Identity/Auth | Hoàn thành core; controls/recovery trên nhánh mới | Tenant/user/roles, PBKDF2, JWT/JWKS, refresh lifecycle và tenant isolation đã merge. Nhánh mới: Redis quotas/fail-closed, OTP 8 chữ số/TTL/guess cap, encrypted email outbox, atomic password reset/session revoke/notice; còn MFA, email verification, history cleanup và key rotation |
+| Identity/Auth | Hoàn thành core và controls/recovery | Tenant/user/roles, PBKDF2, JWT/JWKS, refresh lifecycle và tenant isolation đã merge. Đã tích hợp: Redis quotas/fail-closed, OTP 8 chữ số/TTL/guess cap, encrypted email outbox, atomic password reset/session revoke/notice; còn MFA, email verification, history cleanup và key rotation |
 | Frontend | Chưa triển khai | Chỉ có README; thiếu Angular app, đăng nhập, campaign/import UI và dashboard |
-| Observability/audit | Có nền tảng, chưa hoàn thành | Actuator và Compose Prometheus/Grafana; thiếu metrics nghiệp vụ, dashboard, lag monitoring, distributed tracing, audit consumer |
+| Observability/audit | Có nền tảng, chưa hoàn thành | Nhánh monitoring: authenticated scrape, metrics nghiệp vụ/backlog, RabbitMQ queues/DLQ, Kafka group lag, dashboard Grafana và cảnh báo Alertmanager local; còn distributed tracing, audit consumer và receiver thông báo bên ngoài |
 | Deployment/operations | Có CI, chưa hoàn thành | Thiếu k3d/Kubernetes manifests, cấu hình secret/deployment, backup/restore và operator redrive; các PR Dependabot đang mở cần được rà riêng |
 
 Luồng backend chính đã đi được từ đăng nhập/JWT đến tạo campaign, SMTP/SMS giả lập, trạng thái cuối và báo cáo. Nhánh mới bổ sung chống request abuse và recovery qua mailbox; frontend còn chưa triển khai nên chưa phải MVP dùng được bởi người dùng cuối.
@@ -25,13 +25,15 @@ Kiểm chứng ngày 06/10/2026 trên nhánh controls/recovery: full `clean veri
 
 Không gán phần trăm hoàn thành toàn dự án khi chưa có trọng số và acceptance criteria cho UI/vận hành. Theo 8 nhóm ở bảng, 5 nhóm có workflow cốt lõi đã triển khai (Auth còn phần tăng cường); frontend, observability/audit và deployment/operations còn nhiều việc. Số nhóm không đại diện cho tỷ lệ công sức hoặc thời gian còn lại.
 
+Kiểm chứng ngày 13/10/2026 trên nhánh `quanvv/monitoring`: **190 tests, 0 failures/errors/skipped**. Promtool kiểm tra 11 alert rules và toàn bộ PromQL của dashboard 26 panel. Smoke local xác nhận 5 endpoint scrape có authentication, 4 database snapshots healthy, RabbitMQ/Kafka exporter được scrape; Kafka backlog thử nghiệm đo đúng 2 records, DLQ alert thực sự firing và có trong Alertmanager. Queue/topic/group thử nghiệm được dọn sau kiểm chứng.
+
 ## Thứ tự tiếp theo
 
-1. Review/merge Redis controls và OTP recovery sau khi CI thành công.
+1. Review/merge Monitoring sau khi CI thành công; xem [runbook](monitoring.md).
 2. Frontend: đăng nhập/recovery, danh sách/tạo/start campaign, CSV import, báo cáo và error states; serialize refresh và tôn trọng 429/503 + Retry-After. Thêm E2E trình duyệt qua Gateway.
 3. History retention/cleanup, signing-key rotation, identity audit events, email verification và login MFA; secrets/Redis/SMTP/trusted proxy provisioning cho môi trường chung.
 4. Kiểm soát DLQ redrive với authorization và audit.
-5. Metrics nghiệp vụ và consumer lag, tracing, Grafana dashboard, audit consumer; k3d deployment và recovery runbook.
+5. Distributed tracing, audit consumer; k3d deployment và recovery runbook. Monitoring có dashboard và cảnh báo local; cần cấu hình receiver khi muốn gửi thông báo ra ngoài.
 
 ## Các giới hạn cần giữ rõ
 

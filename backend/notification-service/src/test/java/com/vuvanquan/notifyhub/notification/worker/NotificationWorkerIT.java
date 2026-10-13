@@ -38,7 +38,7 @@ import static org.mockito.Mockito.*;
 import static com.vuvanquan.notifyhub.notification.worker.WorkerConfiguration.*;
 
 @Testcontainers
-@ActiveProfiles({"local", "worker", "events"})
+@ActiveProfiles({"local", "worker", "events", "monitoring"})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "notification.worker.polling-enabled=false", "notification.events.polling-enabled=false",
         "notification.worker.max-attempts=3", "logging.level.org.apache.kafka=WARN",
@@ -55,6 +55,9 @@ class NotificationWorkerIT {
             .withExposedPorts(1025, 8025).waitingFor(Wait.forHttp("/api/v2/messages").forPort(8025));
 
     @DynamicPropertySource static void config(DynamicPropertyRegistry registry) {
+        registry.add("monitoring.username", () -> "scrape-test");
+        registry.add("monitoring.password", () -> "scrape-test-password");
+        registry.add("monitoring.database.poll-interval-ms", () -> 60000);
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("spring.datasource.url", DB::getJdbcUrl);
         registry.add("spring.datasource.username", DB::getUsername);
@@ -91,6 +94,43 @@ class NotificationWorkerIT {
         reset(email, sms, AopTestUtils.getUltimateTargetObject(handoffs));
         clock.set(Instant.now());
         listeners.start();
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
+    @org.springframework.boot.test.web.server.LocalServerPort int port;
+    @Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
+
+    @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
+        monitoringSnapshot.refresh();
+        assertThat(monitoringRegistry.get("notifyhub.monitoring.database.up").gauge().value()).isEqualTo(1);
+        var scrapeClient = HttpClient.newHttpClient();
+        var url = "http://127.0.0.1:" + port;
+        assertThat(scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        String basic = "Basic " + Base64.getEncoder().encodeToString("scrape-test:scrape-test-password".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var response = scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", basic).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("jvm_memory_used_bytes").doesNotContain("scrape-test-password");
+        var wrong = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString("scrape-test:wrong".getBytes())).GET().build();
+        assertThat(scrapeClient.send(wrong, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        assertThat(scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/api/private"))
+                .header("Authorization", basic).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode()).isIn(401, 403);
+    }
+
+    @Test void committed_delivery_counts_once_even_when_task_is_redelivered() {
+        listeners.stop();
+        var task = task("SMS");
+        var completed = monitoringRegistry.get("notifyhub.delivery.completed").tags("channel", "SMS", "status", "SENT").counter();
+        var attempts = monitoringRegistry.get("notifyhub.delivery.attempts").tags("channel", "SMS", "outcome", "success").counter();
+        double beforeCompleted = completed.count(), beforeAttempts = attempts.count();
+        worker.deliver(json.writeValueAsBytes(task), "SMS");
+        worker.deliver(json.writeValueAsBytes(task), "SMS");
+        assertThat(completed.count()).isEqualTo(beforeCompleted + 1);
+        assertThat(attempts.count()).isEqualTo(beforeAttempts + 1);
+        monitoringSnapshot.refresh();
+        assertThat(monitoringRegistry.get("notifyhub.delivery.state").tags("channel", "SMS", "status", "SENT").gauge().value()).isEqualTo(1);
     }
 
     @Test void email_is_sent_to_mailhog_and_committed_with_provider_reference() throws Exception {

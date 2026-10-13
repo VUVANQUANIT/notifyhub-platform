@@ -29,7 +29,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @Testcontainers
-@ActiveProfiles("local")
+@ActiveProfiles({"local", "monitoring"})
 @DirtiesContext(classMode=DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class IdentityIT {
@@ -37,6 +37,9 @@ class IdentityIT {
     @Container static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
     static final String KEY_PATH = keyPath();
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
+        registry.add("monitoring.username", () -> "scrape-test");
+        registry.add("monitoring.password", () -> "scrape-test-password");
+        registry.add("monitoring.database.poll-interval-ms", () -> 60000);
         registry.add("spring.datasource.url", DB::getJdbcUrl);
         registry.add("spring.datasource.username", DB::getUsername);
         registry.add("spring.datasource.password", DB::getPassword);
@@ -46,6 +49,8 @@ class IdentityIT {
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
     }
+    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
+    @org.springframework.beans.factory.annotation.Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
     @LocalServerPort int port;
     @Autowired IdentityService service;
     @Autowired JdbcTemplate db;
@@ -61,6 +66,26 @@ class IdentityIT {
         try (var connection = redis.getConnectionFactory().getConnection()) { connection.serverCommands().flushDb(); }
         db.execute("DROP TRIGGER IF EXISTS reject_refresh ON auth.refresh_tokens");
         db.execute("TRUNCATE auth.refresh_tokens,auth.refresh_sessions,auth.users,auth.tenants CASCADE");
+    }
+
+    @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
+        monitoringSnapshot.refresh();
+        assertThat(monitoringRegistry.get("notifyhub.monitoring.database.up").gauge().value()).isEqualTo(1);
+        var scrapeClient = HttpClient.newHttpClient();
+        var url = "http://127.0.0.1:" + port;
+        var anonymous = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).GET().build();
+        assertThat(scrapeClient.send(anonymous, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        String basic = "Basic " + Base64.getEncoder().encodeToString("scrape-test:scrape-test-password".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var request = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).header("Authorization", basic).GET().build();
+        var response = scrapeClient.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("jvm_memory_used_bytes").doesNotContain("scrape-test-password");
+        var wrong = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString("scrape-test:wrong".getBytes())).GET().build();
+        assertThat(scrapeClient.send(wrong, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        var business = HttpRequest.newBuilder(URI.create(url + "/api/auth/me"))
+                .header("Authorization", basic).GET().build();
+        assertThat(scrapeClient.send(business, HttpResponse.BodyHandlers.ofString()).statusCode()).isIn(401, 403);
     }
 
     @Test void register_login_issue_verifiable_jwt_and_never_store_or_return_secrets_in_user_views() throws Exception {

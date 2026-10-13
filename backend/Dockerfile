@@ -8,6 +8,7 @@ WORKDIR /workspace/backend
 COPY backend/.mvn .mvn
 COPY backend/mvnw backend/pom.xml ./
 COPY backend/event-contracts/pom.xml event-contracts/pom.xml
+COPY backend/monitoring/pom.xml monitoring/pom.xml
 COPY backend/api-gateway/pom.xml api-gateway/pom.xml
 COPY backend/auth-service/pom.xml auth-service/pom.xml
 COPY backend/campaign-service/pom.xml campaign-service/pom.xml

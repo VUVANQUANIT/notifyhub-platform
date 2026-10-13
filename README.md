@@ -147,12 +147,14 @@ notifyhub/
 
 ```powershell
 Copy-Item .env.example .env
+./scripts/setup-monitoring.ps1
 docker compose up -d
 ```
 
 RabbitMQ is enabled by default. Start the Kafka-compatible broker only when working on event streaming:
 
 ```powershell
+./scripts/setup-monitoring.ps1 -Kafka
 docker compose --profile kafka up -d
 ```
 
@@ -176,7 +178,8 @@ mvn -f backend/pom.xml clean verify
 | Redpanda Admin API | `http://localhost:19644` |
 | MailHog | `http://localhost:8025` |
 | Prometheus | `http://localhost:9090` |
-| Grafana | `http://localhost:3000` |
+| Grafana | `http://localhost:3000/d/notifyhub-overview` |
+| Alertmanager | `http://localhost:9093` |
 
 ## Delivery plan
 
@@ -230,7 +233,7 @@ mvn -f backend/pom.xml clean verify
 - [x] Transactional Outbox records and Kafka publisher in Campaign Service.
 - [x] Durable batched dispatch jobs and confirmed RabbitMQ task publishing.
 - [x] Reporting read model with tenant-scoped, paginated REST queries and JWT authorization.
-- [ ] Metrics for throughput, consumer lag, retry count and failure rate.
+- [x] Metrics for throughput, consumer lag, retry count and failure rate; Grafana dashboard and alert rules.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
 - [x] Campaign API/persistence/security Testcontainers integration suite.
 - [x] Container image build and Trivy scan configured in CI.
@@ -258,9 +261,10 @@ mvn -f backend/pom.xml clean verify
 - [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
 - [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
 - [Delivery results, campaign completion and Reporting API](docs/delivery-results-reporting.md)
+- [Monitoring: metrics, dashboard, alerts and runbook](docs/monitoring.md)
 - [Project progress and remaining work](docs/project-progress.md)
 - [Notification Worker: providers, delivery state, acknowledgement, retry and DLQ](docs/notification-worker.md)
 
 ## Project status
 
-Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. Frontend, login MFA, email verification, audit, business observability and Kubernetes operations remain pending. See the [progress assessment](docs/project-progress.md) for scope and evidence.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. Frontend, login MFA, email verification, audit, distributed tracing and Kubernetes operations remain pending. Monitoring provides authenticated Prometheus scraping, business/backlog metrics, RabbitMQ queues, Kafka consumer lag, a provisioned Grafana dashboard and local Alertmanager alerts. See the [progress assessment](docs/project-progress.md) for scope and evidence.

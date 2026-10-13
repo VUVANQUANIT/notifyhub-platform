@@ -57,8 +57,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Prepare local monitoring configuration
+        shell: pwsh
+        run: ./scripts/setup-monitoring.ps1
+
       - name: Validate Compose configuration
-        run: docker compose config --quiet
+        run: docker compose --profile kafka config --quiet
+
+      - name: Validate monitoring configuration and alert rules
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            -v "$PWD/.env.monitoring/MONITORING_PASSWORD:/run/secrets/monitoring_password:ro" \
+            -v "$PWD/.env.monitoring/kafka-targets.json:/etc/prometheus/kafka-targets.json:ro" \
+            prom/prometheus:v2.54.1 check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/infra/prometheus:/rules:ro" \
+            prom/prometheus:v2.54.1 test rules /rules/alerts.test.yml
+          docker run --rm --entrypoint amtool \
+            -v "$PWD/infra/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+            prom/alertmanager:v0.27.0 check-config /etc/alertmanager/alertmanager.yml
 
   containers:
     name: Container / ${{ matrix.service }}

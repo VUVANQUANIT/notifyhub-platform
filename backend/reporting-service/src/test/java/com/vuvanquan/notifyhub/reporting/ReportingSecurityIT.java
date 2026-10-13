@@ -23,20 +23,45 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 @Testcontainers
-@ActiveProfiles("prod")
+@ActiveProfiles({"prod", "monitoring"})
 @Import(ReportingSecurityIT.Keys.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.test")
 class ReportingSecurityIT {
     @Container static final PostgreSQLContainer DB = new PostgreSQLContainer("postgres:16-alpine");
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
+        registry.add("monitoring.username", () -> "scrape-test");
+        registry.add("monitoring.password", () -> "scrape-test-password");
+        registry.add("monitoring.database.poll-interval-ms", () -> 60000);
         registry.add("spring.datasource.url", DB::getJdbcUrl);
         registry.add("spring.datasource.username", DB::getUsername);
         registry.add("spring.datasource.password", DB::getPassword);
     }
     static final KeyPair KEY = keyPair();
+    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
+    @org.springframework.beans.factory.annotation.Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
     @LocalServerPort int port;
     @Autowired ReportProjection projection;
+
+    @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
+        monitoringSnapshot.refresh();
+        assertThat(monitoringRegistry.get("notifyhub.monitoring.database.up").gauge().value()).isEqualTo(1);
+        var scrapeClient = HttpClient.newHttpClient();
+        var url = "http://127.0.0.1:" + port;
+        var anonymous = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).GET().build();
+        assertThat(scrapeClient.send(anonymous, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        String basic = "Basic " + Base64.getEncoder().encodeToString("scrape-test:scrape-test-password".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var request = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).header("Authorization", basic).GET().build();
+        var response = scrapeClient.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("jvm_memory_used_bytes").doesNotContain("scrape-test-password");
+        var wrong = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString("scrape-test:wrong".getBytes())).GET().build();
+        assertThat(scrapeClient.send(wrong, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        var business = HttpRequest.newBuilder(URI.create(url + "/api/reports/summary"))
+                .header("Authorization", basic).GET().build();
+        assertThat(scrapeClient.send(business, HttpResponse.BodyHandlers.ofString()).statusCode()).isIn(401, 403);
+    }
 
     @Test void anonymous_headers_and_wrong_scope_cannot_access_reports() throws Exception {
         assertThat(get(null, "/api/reports/summary").statusCode()).isEqualTo(401);
