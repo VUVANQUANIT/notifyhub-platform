@@ -75,4 +75,13 @@ powershell -NoProfile -File scripts/smoke-campaign-browser.ps1
 
 Run from the repository root after installing frontend dependencies. Pass `-SkipBuild` after backend verify, or `-NodeExecutable <path-to-Node-24>` / `-JavaExecutable <actual-Java-21-executable>` if workstation defaults differ. This smoke owns a separate Compose project on 25432/26379/25673/29093/21025/28025 and JAR ports 28080–28084; Angular uses 4201. It validates email/SMS through completion/reporting, CSV row feedback, MailHog mail, cross-tenant 404 and VIEWER write denial. It stops its JVMs and removes its own containers/network without stopping existing application/other smoke stacks. Logs remain in `test-results/campaign-services`; no live traces/screenshots/video are captured. `npm run e2e:live` remains Auth-only; `npm run e2e:campaign` requires this full stack already running.
 
+When running the campaign live test directly against an already running stack, configure its endpoints (the smoke script does this automatically):
+
+```powershell
+$env:NOTIFYHUB_GATEWAY_URL = 'http://127.0.0.1:28080'
+$env:NOTIFYHUB_MAILHOG_URL = 'http://127.0.0.1:28025'
+# From frontend:
+npm run e2e:campaign
+```
+
 Implementation references: [Angular functional interceptors](https://angular.dev/guide/http/interceptors), [route guards](https://angular.dev/guide/routing/route-guards), [development proxy](https://angular.dev/tools/cli/serve).
