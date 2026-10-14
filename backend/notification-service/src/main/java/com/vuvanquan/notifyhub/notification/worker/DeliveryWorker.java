@@ -1,6 +1,7 @@
 package com.vuvanquan.notifyhub.notification.worker;
 
 import com.vuvanquan.notifyhub.notification.events.ResultOutbox;
+import com.vuvanquan.notifyhub.notification.monitoring.DeliveryMetrics;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,9 +23,10 @@ public class DeliveryWorker {
     private final HandoffStore handoffs;
     private final Clock clock;
     private final ResultOutbox results;
+    private final DeliveryMetrics metrics;
 
     public DeliveryWorker(JdbcTemplate jdbc, ObjectMapper json, EmailDeliveryProvider email,
-            SimulatedSmsProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock, ResultOutbox results) {
+            SimulatedSmsProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock, ResultOutbox results, DeliveryMetrics metrics) {
         this.jdbc = jdbc;
         this.json = json;
         this.email = email;
@@ -33,6 +35,7 @@ public class DeliveryWorker {
         this.handoffs = handoffs;
         this.clock = clock;
         this.results = results;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -79,9 +82,11 @@ public class DeliveryWorker {
         }
         int attempt = state.attempts() + 1;
         String providerReference;
+        long attemptStarted = System.nanoTime();
         try {
             providerReference = task.channel().equals("EMAIL") ? email.send(task) : sms.send(task);
         } catch (DeliveryFailure failure) {
+            metrics.attempt(task.channel(), "failure", System.nanoTime() - attemptStarted);
             if (policy.shouldRetry(attempt, failure.retryable())) {
                 Instant due = DeliveryTime.now(clock).plus(policy.retryDelay(attempt));
                 jdbc.update("""
@@ -89,17 +94,20 @@ public class DeliveryWorker {
                         last_error=?,updated_at=? WHERE notification_id=?
                         """, attempt, Timestamp.from(due), failure.getMessage(), Timestamp.from(DeliveryTime.now(clock)), task.notificationId());
                 handoffs.retry(task, payload, attempt, due, failure.getMessage());
+                metrics.retry(task.channel());
             } else {
                 fail(task, payload, attempt, failure.getMessage(), DeliveryTime.now(clock));
             }
             return;
         }
+        metrics.attempt(task.channel(), "success", System.nanoTime() - attemptStarted);
         Instant completedAt = DeliveryTime.now(clock);
         jdbc.update("""
                 UPDATE notification.deliveries SET status='SENT',attempts=?,next_attempt_at=NULL,
                 provider_reference=?,last_error=NULL,updated_at=?,completed_at=? WHERE notification_id=?
                 """, attempt, providerReference, Timestamp.from(completedAt), Timestamp.from(completedAt), task.notificationId());
         results.record(task, "SENT", attempt, providerReference, null, completedAt);
+        metrics.completed(task.channel(), "SENT");
     }
 
     private void fail(SendNotificationTask task, byte[] payload, int attempt, String error, Instant at) {
@@ -109,6 +117,7 @@ public class DeliveryWorker {
                 """, attempt, error, Timestamp.from(at), Timestamp.from(at), task.notificationId());
         handoffs.failed(task, payload, attempt, error);
         results.record(task, "FAILED", attempt, null, error, at);
+        metrics.completed(task.channel(), "FAILED");
     }
 
     private record State(String hash, String status, int attempts, Instant nextAttemptAt) {}

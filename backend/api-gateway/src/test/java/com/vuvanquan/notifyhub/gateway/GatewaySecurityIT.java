@@ -18,12 +18,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.*;
 
+@ActiveProfiles("monitoring")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewaySecurityIT {
     static final KeyPair KEY = pair();
     static final HttpServer UPSTREAM = upstream();
     static String upstreamUri() { return "http://127.0.0.1:" + UPSTREAM.getAddress().getPort(); }
     @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) {
+        registry.add("monitoring.username", () -> "scrape-test");
+        registry.add("monitoring.password", () -> "scrape-test-password");
+        registry.add("monitoring.database.poll-interval-ms", () -> 60000);
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", GatewaySecurityIT::upstreamUri);
         registry.add("spring.security.oauth2.resourceserver.jwt.jwk-set-uri", () -> upstreamUri() + "/.well-known/jwks.json");
         registry.add("spring.cloud.gateway.server.webflux.routes[0].id", () -> "test-upstream");
@@ -32,6 +36,25 @@ class GatewaySecurityIT {
     }
     @LocalServerPort int port;
     private final HttpClient client = HttpClient.newHttpClient();
+    @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
+
+    @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
+        var scrapeClient = HttpClient.newHttpClient();
+        var url = "http://127.0.0.1:" + port;
+        assertThat(scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus")).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        String basic = "Basic " + Base64.getEncoder().encodeToString("scrape-test:scrape-test-password".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var response = scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", basic).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("jvm_memory_used_bytes").doesNotContain("scrape-test-password");
+        var wrong = HttpRequest.newBuilder(URI.create(url + "/actuator/prometheus"))
+                .header("Authorization", "Basic " + Base64.getEncoder().encodeToString("scrape-test:wrong".getBytes())).GET().build();
+        assertThat(scrapeClient.send(wrong, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
+        assertThat(scrapeClient.send(HttpRequest.newBuilder(URI.create(url + "/api/campaigns"))
+                .header("Authorization", basic).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode()).isIn(401, 403);
+    }
+
     @Test void anonymous_headers_cannot_access_guarded_routes_but_jwks_login_are_public() throws Exception {
         assertThat(request("GET", "/api/campaigns", null).statusCode()).isEqualTo(401);
         assertThat(request("GET", "/api/reports/summary", null).statusCode()).isEqualTo(401);
