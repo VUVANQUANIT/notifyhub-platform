@@ -13,7 +13,7 @@
 | Delivery | Hoàn thành local MVP | RabbitMQ manual ack, SMTP/MailHog, SMS giả lập, durable retry/DLQ, dedup, kết quả Kafka; chưa có provider SMS thật hoặc redrive admin API |
 | Reporting | Hoàn thành read model MVP | Kafka projection, trạng thái/counters, API phân trang và lọc, tenant/JWT checks; eventual consistency, chưa có UI |
 | Identity/Auth | Hoàn thành core và controls/recovery | Tenant/user/roles, PBKDF2, JWT/JWKS, refresh lifecycle và tenant isolation đã merge. Đã tích hợp: Redis quotas/fail-closed, OTP 8 chữ số/TTL/guess cap, encrypted email outbox, atomic password reset/session revoke/notice; còn MFA, email verification, history cleanup và key rotation |
-| Frontend | Chưa triển khai | Chỉ có README; thiếu Angular app, đăng nhập, campaign/import UI và dashboard |
+| Frontend | Auth/session/recovery có trên nhánh frontend | Angular login/logout, refresh tuần tự, Retry-After, recovery và trang tài khoản/tổ chức từ PR #13; campaign/import/reporting đang được triển khai trên nhánh `quanvv/frontend-campaign-reporting` |
 | Observability/audit | Có nền tảng, chưa hoàn thành | Nhánh monitoring: authenticated scrape, metrics nghiệp vụ/backlog, RabbitMQ queues/DLQ, Kafka group lag, dashboard Grafana và cảnh báo Alertmanager local; còn distributed tracing, audit consumer và receiver thông báo bên ngoài |
 | Deployment/operations | Có CI, chưa hoàn thành | Thiếu k3d/Kubernetes manifests, cấu hình secret/deployment, backup/restore và operator redrive; các PR Dependabot đang mở cần được rà riêng |
 

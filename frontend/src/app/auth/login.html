@@ -1,0 +1,49 @@
+<main class="auth-layout">
+  <section class="auth-story" aria-label="NotifyHub">
+    <a class="brand" routerLink="/login" aria-label="NotifyHub"><span class="brand-mark" aria-hidden="true">n<span></span></span>notifyhub<span class="brand-dot">.</span></a>
+    <div class="story-content">
+      <span class="eyebrow">KẾT NỐI CÓ CHỦ ĐÍCH</span>
+      <h1>Đúng thông điệp.<br>Đúng người nhận.</h1>
+      <p>Một không gian để kết nối với khách hàng và theo dõi những thông điệp bạn gửi đi.</p>
+      <div class="message-art" aria-hidden="true">
+        <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+        <div class="message-note"><span class="note-icon">↗</span><div><strong>Mỗi kết nối đều có ý nghĩa.</strong><span>Hãy bắt đầu từ một thông điệp.</span></div><span class="note-check">✓</span></div>
+        <span class="art-spark">✳</span><div class="art-pill"><span></span>Luôn giữ kết nối</div>
+      </div>
+    </div>
+    <div class="story-footer"><span>Thông điệp nhỏ. Kết nối lớn.</span><span>01 — NOTIFYHUB</span></div>
+  </section>
+  <section class="auth-panel">
+    <div class="auth-panel-top"><span>KHÔNG GIAN LÀM VIỆC</span><span class="secure-label"><span aria-hidden="true">◈</span> Truy cập an toàn</span></div>
+    <div class="auth-form-wrap">
+      <span class="section-number">01 / ĐĂNG NHẬP</span>
+      <h2>Chào mừng trở lại<span class="accent">.</span></h2>
+      <p class="form-intro">Đăng nhập để vào không gian làm việc của bạn.</p>
+      @if (resetDone) { <div class="notice success" role="status">Mật khẩu đã được cập nhật. Hãy đăng nhập bằng mật khẩu mới.</div> }
+      @if (expired) { <div class="notice" role="status">Phiên làm việc đã kết thúc. Vui lòng đăng nhập lại.</div> }
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <fieldset [disabled]="state.busy()">
+          <div class="field">
+            <label for="tenant">Mã tổ chức</label>
+            <input id="tenant" formControlName="tenantSlug" autocomplete="organization" placeholder="vd: acme-team" maxlength="63" [attr.aria-invalid]="invalid('tenantSlug')" aria-describedby="tenant-hint">
+            <span id="tenant-hint" class="field-hint" [class.field-error]="invalid('tenantSlug')">{{ invalid('tenantSlug') ? 'Nhập 3–63 chữ thường, chữ số hoặc dấu gạch ngang.' : 'Mã được quản trị viên cung cấp cho bạn.' }}</span>
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" formControlName="email" type="email" autocomplete="username" placeholder="ban@congty.com" maxlength="254" [attr.aria-invalid]="invalid('email')" aria-describedby="email-error">
+            @if (invalid('email')) { <span id="email-error" class="field-error">Nhập địa chỉ email hợp lệ.</span> }
+          </div>
+          <div class="field">
+            <div class="label-row"><label for="password">Mật khẩu</label><a routerLink="/forgot-password">Quên mật khẩu?</a></div>
+            <div class="password-input"><input id="password" formControlName="password" [type]="showPassword() ? 'text' : 'password'" autocomplete="current-password" placeholder="Nhập mật khẩu của bạn" maxlength="128" [attr.aria-invalid]="invalid('password')" aria-describedby="password-error"><button type="button" class="reveal" (click)="showPassword.set(!showPassword())" [attr.aria-label]="showPassword() ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'">{{ showPassword() ? 'Ẩn' : 'Hiện' }}</button></div>
+            @if (invalid('password')) { <span id="password-error" class="field-error">Vui lòng nhập mật khẩu.</span> }
+          </div>
+          @if (state.error()) { <div class="notice error" role="alert">{{ state.error() }}</div> }
+          <button class="primary-button" type="submit" [disabled]="state.blocked">{{ state.busy() ? 'Đang đăng nhập…' : state.remaining() ? 'Thử lại sau ' + state.remaining() + ' giây' : 'Vào không gian làm việc' }}<span aria-hidden="true">↗</span></button>
+        </fieldset>
+      </form>
+      <p class="form-support">Chưa có tài khoản? <span>Liên hệ quản trị viên tổ chức.</span></p>
+    </div>
+    <footer class="auth-panel-footer"><span>© 2026 NotifyHub</span><span>Dành cho những kết nối tốt hơn.</span></footer>
+  </section>
+</main>
