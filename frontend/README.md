@@ -1,12 +1,14 @@
 # NotifyHub Web
 
-Angular 22 standalone application for the NotifyHub tenant workspace. The first slice implements login/logout, an in-memory token lifecycle, email OTP password recovery and a protected account/tenant overview. Campaign/import/reporting screens are the next slice.
+Angular 22 standalone application for the NotifyHub tenant workspace: login/logout, in-memory token lifecycle, email OTP recovery, account/tenant overview, campaign creation/CSV import/start/schedule and delivery reporting.
 
 ## Run locally
 
 Use Node **24.19+** (or another version matching `package.json` engines) and npm **11+**. Node 16 cannot build this application. `.nvmrc` pins the verified runtime.
 
 From the repository root, start PostgreSQL/Redis/MailHog and Auth/Gateway using [the Auth runbook](../docs/auth-service.md). Then:
+
+For the sending/reporting workflow, also run Kafka/RabbitMQ, Campaign and Reporting with `authenticated-local,messaging`, and Notification with `local,worker,events`; use the messaging/delivery runbooks for broker settings. Starting only Auth/Gateway is enough for account/recovery screens, while campaign/reporting screens require their services. The isolated campaign browser smoke below launches the complete stack.
 
 ```powershell
 cd frontend
@@ -56,5 +58,30 @@ The script builds Auth/Gateway and starts an isolated `notifyhub-auth-browser` C
 Live tests disable traces, video and screenshots to avoid retaining real OTP/password/token payloads. Logs are Git-ignored under `test-results/live-services`; local test signing/control keys are Git-ignored under `.env.browser-smoke/`. The normal E2E suite contains only synthetic credentials.
 
 CI runs frontend install, production build, unit tests and the regular Chromium suite as `Frontend verify`. Real browser smoke is available locally; backend CI separately verifies infrastructure with Testcontainers.
+
+## Campaigns and reporting
+
+After login, use **Chiến dịch** to filter/page campaigns, create an EMAIL or simulated SMS draft, upload a UTF-8 CSV and review accepted/duplicate/invalid counts and row errors. CSV limits are 2 MiB / 10,000 data records; use `email,name` for email or `phoneNumber,name` for SMS (international `+` prefix). A rejected file is shown as rejected even though the import endpoint returns 201. Starting requires at least one valid recipient and a DRAFT campaign. A chosen local date/time is converted to UTC; starting a future campaign confirms its schedule.
+
+ADMIN/OPERATOR can create/import/start; VIEWER sees read-only screens. Gateway/service scopes remain authoritative. Retry of an ambiguous create retains its exact payload/key and freezes the form; start retries reuse their key. Neither operation retries automatically. Keys stay in component memory, so leaving the screen/reloading loses them: inspect the campaign list before resubmitting a create after an uncertain response. CSV re-upload creates another import record, with destination deduplication on the server.
+
+**Báo cáo** shows tenant-wide counters, campaign summaries and paginated SENT/FAILED deliveries with safe failure codes. Report IDs link back to Campaign; there are no cross-service DB reads. Unknown expected/pending counts remain unknown. Reports are eventually consistent, and drafts or newly started campaigns may initially return 404. Refresh is manual; there is no polling loop. HTTP 403/404/409/413, network failure and 429/503 backoff have visible states. Server exception details are not displayed; user content is rendered as text.
+
+To verify the complete browser workflow with real PostgreSQL/Redis/Kafka/RabbitMQ/MailHog and five JARs:
+
+```powershell
+powershell -NoProfile -File scripts/smoke-campaign-browser.ps1
+```
+
+Run from the repository root after installing frontend dependencies. Pass `-SkipBuild` after backend verify, or `-NodeExecutable <path-to-Node-24>` / `-JavaExecutable <actual-Java-21-executable>` if workstation defaults differ. This smoke owns a separate Compose project on 25432/26379/25673/29093/21025/28025 and JAR ports 28080–28084; Angular uses 4201. It validates email/SMS through completion/reporting, CSV row feedback, MailHog mail, cross-tenant 404 and VIEWER write denial. It stops its JVMs and removes its own containers/network without stopping existing application/other smoke stacks. Logs remain in `test-results/campaign-services`; no live traces/screenshots/video are captured. `npm run e2e:live` remains Auth-only; `npm run e2e:campaign` requires this full stack already running.
+
+When running the campaign live test directly against an already running stack, configure its endpoints (the smoke script does this automatically):
+
+```powershell
+$env:NOTIFYHUB_GATEWAY_URL = 'http://127.0.0.1:28080'
+$env:NOTIFYHUB_MAILHOG_URL = 'http://127.0.0.1:28025'
+# From frontend:
+npm run e2e:campaign
+```
 
 Implementation references: [Angular functional interceptors](https://angular.dev/guide/http/interceptors), [route guards](https://angular.dev/guide/routing/route-guards), [development proxy](https://angular.dev/tools/cli/serve).
