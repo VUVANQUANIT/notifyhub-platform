@@ -28,7 +28,8 @@ test('real Gateway workflow: email/SMS CSV, worker completion, reporting and ano
       await expect(page.locator('.metric-grid strong').nth(1)).toHaveText('1'); await expect(page.locator('.metric-grid strong').nth(3)).toHaveText('0');
     }).toPass({timeout:60_000,intervals:[1000,2000,3000]});
   }
-  const mail = await request.get(`http://127.0.0.1:28025/api/v2/search?kind=containing&query=${encodeURIComponent(slug)}`);
+  const mailHogUrl = process.env['NOTIFYHUB_MAILHOG_URL'] || 'http://127.0.0.1:18025';
+  const mail = await request.get(`${mailHogUrl}/api/v2/search?kind=containing&query=${encodeURIComponent(slug)}`);
   expect(mail.status()).toBe(200); expect((await mail.json()).items.length).toBeGreaterThan(0);
   await page.getByRole('link',{name:'Báo cáo',exact:true}).click(); await expect(page.locator('.metric-grid strong').nth(0)).toHaveText('2');
   const otherSlug = `other-${Date.now()}`; expect((await request.post('/api/auth/register',{data:{tenantSlug:otherSlug,tenantName:'Other Team',email:'admin@example.com',displayName:'Other Admin',password}})).status()).toBe(200);
