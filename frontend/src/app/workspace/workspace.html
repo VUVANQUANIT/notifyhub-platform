@@ -1,0 +1,25 @@
+<main class="workspace-layout">
+  <aside class="sidebar">
+    <a class="brand" routerLink="/workspace"><span class="brand-mark" aria-hidden="true">n<span></span></span>notifyhub<span class="brand-dot">.</span></a>
+    <div class="tenant-switch"><span class="tenant-avatar">{{ auth.tenant()?.name?.charAt(0) || 'N' }}</span><div><strong>{{ auth.tenant()?.name }}</strong><span>Không gian làm việc</span></div></div>
+    <span class="nav-label">KHÔNG GIAN CỦA BẠN</span>
+    <nav aria-label="Điều hướng chính"><a class="nav-item active" routerLink="/workspace" aria-current="page"><span aria-hidden="true">▦</span>Tổng quan<span class="nav-arrow" aria-hidden="true">↗</span></a><a class="nav-item" routerLink="/forgot-password"><span aria-hidden="true">◈</span>Khôi phục tài khoản</a></nav>
+    <div class="sidebar-bottom"><span class="sidebar-caption">Thông điệp nhỏ.<br>Kết nối lớn.</span><div class="sidebar-profile"><span class="profile-avatar">{{ auth.user()?.displayName?.charAt(0) || 'N' }}</span><div><strong>{{ auth.user()?.displayName }}</strong><span>{{ roleNames[auth.user()?.role || 'VIEWER'] }}</span></div></div><button class="logout-button" type="button" [disabled]="logoutState.busy()" (click)="logout()">{{ logoutState.busy() ? 'Đang đăng xuất…' : 'Đăng xuất' }}<span aria-hidden="true">↗</span></button></div>
+  </aside>
+  <section class="workspace-main">
+    <header class="workspace-header"><span>TỔNG QUAN</span><span class="workspace-status"><span></span> Đã đăng nhập</span></header>
+    <div class="workspace-content">
+      <div class="welcome-row"><div><span class="section-number">KHÔNG GIAN LÀM VIỆC</span><h1>Chào {{ auth.user()?.displayName }}<span class="accent">.</span></h1><p>Thông tin tài khoản và tổ chức của bạn ở cùng một nơi.</p></div><span class="welcome-art" aria-hidden="true">✳</span></div>
+      <div class="workspace-divider"></div>
+      <div class="section-heading"><h2>Thông tin của bạn</h2><button class="secondary-button" type="button" [disabled]="state.blocked || logoutState.busy()" (click)="reload()">{{ state.busy() ? 'Đang làm mới…' : state.remaining() ? 'Thử lại sau ' + state.remaining() + ' giây' : 'Làm mới thông tin' }}<span aria-hidden="true">↻</span></button></div>
+      @if (state.error()) { <div class="notice error" role="alert">{{ state.error() }}</div> }
+      @if (refreshed()) { <p class="refresh-feedback" role="status">Thông tin đã được cập nhật.</p> }
+      <div class="account-grid">
+        <article class="account-card"><div class="card-heading"><span class="card-symbol" aria-hidden="true">◎</span><span class="eyebrow">TÀI KHOẢN</span><span class="tag">{{ roleNames[auth.user()?.role || 'VIEWER'] }}</span></div><h3>{{ auth.user()?.displayName }}</h3><p class="account-email">{{ auth.user()?.email }}</p><dl><div><dt>Quyền truy cập</dt><dd>{{ roleNames[auth.user()?.role || 'VIEWER'] }}</dd></div><div><dt>Trạng thái</dt><dd><span class="inline-status"><span></span>Đang hoạt động</span></dd></div></dl></article>
+        <article class="account-card tenant-card"><div class="card-heading"><span class="card-symbol" aria-hidden="true">▦</span><span class="eyebrow">TỔ CHỨC</span></div><h3>{{ auth.tenant()?.name }}</h3><p class="account-email">Không gian dành cho nhóm của bạn.</p><dl><div><dt>Mã tổ chức</dt><dd>{{ auth.tenant()?.slug }}</dd></div><div><dt>Thành viên</dt><dd>{{ auth.user()?.email }}</dd></div></dl></article>
+      </div>
+      <article class="security-card"><span class="security-symbol" aria-hidden="true">◈</span><div><h3>Giữ tài khoản trong tầm kiểm soát.</h3><p>Sử dụng mật khẩu riêng và đăng xuất khi bạn kết thúc trên thiết bị dùng chung.</p></div><a routerLink="/forgot-password">Khôi phục mật khẩu <span aria-hidden="true">↗</span></a></article>
+    </div>
+    <footer class="workspace-footer"><span>© 2026 NotifyHub</span><span>Luôn giữ kết nối.</span></footer>
+  </section>
+</main>
