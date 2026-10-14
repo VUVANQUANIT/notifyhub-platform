@@ -1,0 +1,12 @@
+<app-shell section="Chiến dịch">
+  <div class="welcome-row"><div><span class="section-number">GỬI ĐÚNG NGƯỜI</span><h1>Chiến dịch<span class="accent">.</span></h1><p>Tạo thông điệp, nhập danh sách và theo dõi trạng thái gửi.</p></div>@if (canWrite) { <a class="action-link" routerLink="/campaigns/new">Tạo chiến dịch ↗</a> }</div>
+  <div class="workspace-divider"></div>
+  <div class="toolbar"><label>Trạng thái <select aria-label="Trạng thái" [(ngModel)]="status" [disabled]="state.blocked" (ngModelChange)="load(0)"><option value="">Tất cả</option>@for (item of statuses; track item) { <option [value]="item">{{ labels[item] }}</option> }</select></label><button class="secondary-button" [disabled]="state.blocked" (click)="load(result()?.page || 0)">Làm mới chiến dịch</button></div>
+  @if (state.error()) { <div class="notice error" role="alert">{{ state.error() }} @if (state.remaining()) { Thử lại sau {{ state.remaining() }} giây. }</div> }
+  @if (state.busy()) { <p role="status">Đang tải chiến dịch…</p> }
+  @if (result(); as data) {
+    @if (!data.items.length) { <div class="empty-state"><h2>Chưa có chiến dịch trong danh sách này</h2><p>Thử trạng thái khác hoặc tạo chiến dịch đầu tiên.</p></div> }
+    @else { <div class="table-wrap"><table><caption>{{ data.totalElements }} chiến dịch</caption><thead><tr><th>Tên chiến dịch</th><th>Kênh</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead><tbody>@for (item of data.items; track item.id) { <tr><td><a [routerLink]="['/campaigns',item.id]">{{ item.name }}</a></td><td>{{ item.channel }}</td><td><span class="status-tag" [class.failed]="item.status === 'FAILED'">{{ labels[item.status] }}</span></td><td>{{ item.createdAt | date:'dd/MM/yyyy HH:mm' }}</td></tr> }</tbody></table></div> }
+    <div class="pagination"><button class="secondary-button" [disabled]="state.blocked || data.page === 0" (click)="load(data.page - 1)">Trang trước</button><span>Trang {{ data.page + 1 }}</span><button class="secondary-button" [disabled]="state.blocked || (data.page + 1)*data.size >= data.totalElements" (click)="load(data.page + 1)">Trang sau</button></div>
+  }
+</app-shell>

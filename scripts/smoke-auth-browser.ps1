@@ -88,7 +88,7 @@ try {
         -RedirectStandardOutput (Join-Path $logs 'gateway.log') -RedirectStandardError (Join-Path $logs 'gateway-error.log')
     Ready "$gateway/.well-known/jwks.json"
     Push-Location (Join-Path $repo 'frontend')
-    try { Run 'node' @('node_modules/@playwright/test/cli.js','test','--config','playwright.live.config.ts') } finally { Pop-Location }
+    try { Run 'node' @('node_modules/@playwright/test/cli.js','test','--config','playwright.live.config.ts','auth.live.spec.ts') } finally { Pop-Location }
 } finally {
     foreach ($process in $processes) { if (!$process.HasExited) { Stop-Process -Id $process.Id -ErrorAction SilentlyContinue } }
     # Keep volumes for diagnosis; stop only services under our project name.

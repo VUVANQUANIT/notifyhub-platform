@@ -8,7 +8,8 @@
     "build": "ng build",
     "test": "ng test --watch=false",
     "e2e": "playwright test",
-    "e2e:live": "playwright test --config playwright.live.config.ts"
+    "e2e:live": "playwright test --config playwright.live.config.ts auth.live.spec.ts",
+    "e2e:campaign": "playwright test --config playwright.live.config.ts campaign.live.spec.ts"
   },
   "dependencies": {
     "@angular/common": "22.2.2",

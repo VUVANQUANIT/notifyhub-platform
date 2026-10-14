@@ -28,6 +28,14 @@ export class RequestState {
       this.wait(retryDelay(error));
     } else if (error.status === 401) {
       this.error.set(unauthorized);
+    } else if (error.status === 403) {
+      this.error.set('Bạn không có quyền thực hiện thao tác này.');
+    } else if (error.status === 404) {
+      this.error.set('Không tìm thấy dữ liệu trong tổ chức này. Báo cáo mới có thể chưa sẵn sàng; hãy làm mới sau.');
+    } else if (error.status === 409) {
+      this.error.set('Trạng thái hoặc yêu cầu đã thay đổi. Làm mới dữ liệu trước khi thao tác tiếp.');
+    } else if (error.status === 413) {
+      this.error.set('File quá lớn. Giới hạn CSV là 2 MiB.');
     } else if (error.status === 0 || error.status >= 500) {
       this.error.set('Không thể kết nối dịch vụ. Vui lòng thử lại sau.');
     } else {
