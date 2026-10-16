@@ -28,12 +28,14 @@ public class IdentityService {
     private final AuthProperties config;
     private final Clock clock;
     private final String dummyHash;
+    private final MfaService mfa;
 
     public IdentityService(JdbcTemplate db, org.springframework.transaction.PlatformTransactionManager manager,
-            PasswordEncoder passwords, TokenIssuer issuer, AuthProperties config, Clock clock) {
+            PasswordEncoder passwords, TokenIssuer issuer, AuthProperties config, Clock clock, MfaService mfa) {
         this.db = db; this.tx = new TransactionTemplate(manager); this.passwords = passwords;
         this.issuer = issuer; this.config = config; this.clock = clock;
         this.dummyHash = passwords.encode(UUID.randomUUID().toString());
+        this.mfa = mfa;
     }
 
     public Tokens register(String slug, String name, String email, String displayName, String password) {
@@ -54,6 +56,9 @@ public class IdentityService {
     }
 
     public Tokens login(String slug, String email, String password) {
+        return login(slug,email,password,null);
+    }
+    public Tokens login(String slug, String email, String password, String code) {
         // Login uses the same generic response for unknown, disabled and incorrect credentials.
         if (password == null || password.length() > 128) throw AuthFailure.unauthorized();
         String normalizedSlug = slug == null ? "" : slug.strip().toLowerCase(java.util.Locale.ROOT);
@@ -64,6 +69,7 @@ public class IdentityService {
             User user = tenants.isEmpty() ? null : findUserByEmail(tenants.getFirst(), normalizedEmail);
             boolean matches = passwords.matches(password, user == null ? dummyHash : user.passwordHash());
             if (user == null || !user.enabled() || !matches) throw AuthFailure.unauthorized();
+            mfa.verifyLogin(user.tenantId(),user.id(),code);
             return session(user);
         });
     }

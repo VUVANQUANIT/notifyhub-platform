@@ -39,6 +39,7 @@
             @if (invalid('password')) { <span id="password-error" class="field-error">Vui lòng nhập mật khẩu.</span> }
           </div>
           @if (state.error()) { <div class="notice error" role="alert">{{ state.error() }}</div> }
+          <div class="field"><label for="login-mfa">Mã xác thực hai bước (nếu đã bật)</label><input id="login-mfa" formControlName="code" autocomplete="one-time-code" maxlength="43"><span class="field-hint">Nhập mã 6 số từ ứng dụng xác thực hoặc một mã khôi phục.</span></div>
           <button class="primary-button" type="submit" [disabled]="state.blocked">{{ state.busy() ? 'Đang đăng nhập…' : state.remaining() ? 'Thử lại sau ' + state.remaining() + ' giây' : 'Vào không gian làm việc' }}<span aria-hidden="true">↗</span></button>
         </fieldset>
       </form>

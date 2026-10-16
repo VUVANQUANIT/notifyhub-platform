@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
+  { path: 'security', canActivate: [authGuard], loadComponent: () => import('./auth/mfa').then(m => m.Mfa) },
   { path: 'activate', loadComponent: () => import('./auth/activate').then(m => m.Activate) },
   { path: 'invitations', canActivate: [authGuard], loadComponent: () => import('./members/invitations').then(m => m.Invitations) },
   { path: 'login', loadComponent: () => import('./auth/login').then(m => m.Login) },
