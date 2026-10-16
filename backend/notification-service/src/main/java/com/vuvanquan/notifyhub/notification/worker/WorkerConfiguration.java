@@ -26,7 +26,9 @@ public class WorkerConfiguration {
     @Bean
     DeliveryPolicy deliveryPolicy(@Value("${notification.worker.max-attempts:4}") int attempts,
             @Value("${notification.worker.initial-retry-delay:1s}") Duration initial,
-            @Value("${notification.worker.max-retry-delay:60s}") Duration maximum) {
+            @Value("${notification.worker.max-retry-delay:60s}") Duration maximum,
+            @Value("${notification.sms.provider:simulated}") String smsProvider) {
+        if(!java.util.Set.of("simulated","twilio").contains(smsProvider))throw new IllegalArgumentException("Unsupported SMS provider");
         return new DeliveryPolicy(attempts, initial, maximum);
     }
 

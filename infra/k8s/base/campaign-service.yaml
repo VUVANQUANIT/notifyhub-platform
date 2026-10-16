@@ -62,4 +62,3 @@ spec:
   selector: {app: campaign-service}
   ports:
     - {name: http, port: 8082, targetPort: http}
-

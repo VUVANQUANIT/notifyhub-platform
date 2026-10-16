@@ -100,6 +100,23 @@ class NotificationWorkerIT {
     @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     @Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
+
+    @Test void real_sms_protocol_rate_limit_uses_durable_capped_retry_then_records_acceptance() throws Exception {
+        listeners.stop();var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        var calls=new java.util.concurrent.atomic.AtomicInteger();String sid="SM"+"e".repeat(32);
+        server.createContext("/Messages.json",exchange->{exchange.getRequestBody().readAllBytes();boolean limited=calls.incrementAndGet()==1;byte[] body=(limited?"{}":"{\"sid\":\""+sid+"\",\"status\":\"queued\"}").getBytes(StandardCharsets.UTF_8);exchange.getResponseHeaders().add("Retry-After","3600");exchange.sendResponseHeaders(limited?429:201,body.length);try(var output=exchange.getResponseBody()){output.write(body);}});server.start();
+        try{
+            var provider=new TwilioSmsProvider(TwilioSmsProviderTest.ACCOUNT,TwilioSmsProviderTest.KEY,TwilioSmsProviderTest.SECRET,"+12025550100","",json,http,URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/Messages.json"));
+            doAnswer(call->provider.send(call.getArgument(0))).when(sms).send(any());
+            var task=task("SMS");byte[] bytes=json.writeValueAsBytes(task);worker.deliver(bytes,"SMS");
+            var due=jdbc.queryForObject("SELECT next_attempt_at FROM notification.deliveries WHERE notification_id=?",java.sql.Timestamp.class,task.notificationId()).toInstant();
+            assertThat(Duration.between(clock.instant(),due).toMillis()).isBetween(19999L,20000L);
+            clock.advance(Duration.ofSeconds(20));worker.deliver(bytes,"SMS");worker.deliver(bytes,"SMS");
+            assertThat(jdbc.queryForObject("SELECT status FROM notification.deliveries WHERE notification_id=?",String.class,task.notificationId())).isEqualTo("SENT");
+            assertThat(jdbc.queryForObject("SELECT provider_reference FROM notification.deliveries WHERE notification_id=?",String.class,task.notificationId())).isEqualTo(sid);
+            assertThat(calls.get()).isEqualTo(2);
+        }finally{server.stop(0);}
+    }
     static final java.security.KeyPair OPERATIONS_KEY=operationsKey();
     static java.security.KeyPair operationsKey(){try{var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);return generator.generateKeyPair();}catch(Exception e){throw new IllegalStateException(e);}}
     private String operationsToken(String scope,UUID tenant) throws Exception {

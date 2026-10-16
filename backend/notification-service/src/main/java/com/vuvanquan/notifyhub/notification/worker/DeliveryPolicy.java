@@ -21,4 +21,9 @@ public record DeliveryPolicy(int maxAttempts, Duration initialDelay, Duration ma
         if (attempts < 1 || attempts > 10) throw new IllegalArgumentException("Attempts must be 1..10");
         return Duration.ofMillis(Math.min(maxDelay.toMillis(), initialDelay.toMillis() * (1L << (attempts - 1))));
     }
+    public Duration retryDelay(int attempts,Duration providerDelay) {
+        Duration normal=retryDelay(attempts);
+        if(providerDelay==null || providerDelay.compareTo(normal)<0)return normal;
+        return providerDelay.compareTo(maxDelay)>0?maxDelay:providerDelay;
+    }
 }

@@ -1,0 +1,14 @@
+# Explicit opt-in for real identity emails. No plaintext/authentication downgrade.
+spring:
+  mail:
+    port: ${AUTH_SMTP_PORT:587}
+    username: ${AUTH_SMTP_USERNAME}
+    password: ${AUTH_SMTP_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.ssl.checkserveridentity: true
+auth:
+  control:
+    mail-from: ${AUTH_MAIL_FROM}
