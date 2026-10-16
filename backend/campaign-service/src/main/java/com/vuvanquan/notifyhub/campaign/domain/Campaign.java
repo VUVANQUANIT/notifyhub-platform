@@ -69,10 +69,14 @@ public final class Campaign {
         this.name = Objects.requireNonNull(newName, "Campaign name must not be null");
     }
 
-    public void changeContent(MessageContent newContent) {
+    public void updateContent(MessageContent newContent) {
         ensureDraft("Only a draft campaign can change content");
         Objects.requireNonNull(newContent, "Message content must not be null").validateFor(channel);
         this.content = newContent;
+    }
+
+    public void assertCanImportRecipients() {
+        ensureDraft("Recipients can only be imported into a draft campaign");
     }
 
     public void start(CampaignReadiness readiness, Instant now) {
@@ -137,6 +141,31 @@ public final class Campaign {
 
     public CampaignStatus status() {
         return status;
+    }
+
+    // Persistence boundary: reconstruction still validates content and lifecycle consistency.
+    public static Campaign restore(CampaignId id, TenantId tenantId, CampaignName name, Channel channel,
+            MessageContent content, Schedule schedule, UserId createdBy, Instant createdAt,
+            CampaignStatus status, Instant startedAt) {
+        Campaign campaign = create(id, tenantId, name, channel, content, schedule, createdBy, createdAt);
+        Objects.requireNonNull(status, "Campaign status must not be null");
+        boolean hasStarted = status == CampaignStatus.RUNNING || status == CampaignStatus.COMPLETED
+                || status == CampaignStatus.FAILED;
+        if (hasStarted != (startedAt != null)) {
+            throw new IllegalArgumentException("Campaign status and startedAt are inconsistent");
+        }
+        if (status == CampaignStatus.SCHEDULED && schedule.sendAt().isEmpty()) {
+            throw new IllegalArgumentException("Scheduled campaign requires a scheduled time");
+        }
+        if (startedAt != null) {
+            campaign.ensureNotBeforeCreation(startedAt);
+            if (schedule.isFutureAt(startedAt)) {
+                throw new IllegalArgumentException("Campaign cannot start before its scheduled time");
+            }
+        }
+        campaign.status = status;
+        campaign.startedAt = startedAt;
+        return campaign;
     }
 
     public CampaignName name() {

@@ -21,16 +21,16 @@ Project **đủ nền tảng cấu trúc để bắt đầu viết test**, vì:
 - Campaign flow, state machine và các invariant đã được mô tả trong `docs/domain/campaign-domain.md`.
 - Maven Surefire được quản lý thông qua Spring Boot parent và sẽ tự chạy các test đúng quy ước tên.
 
-Project **chưa sẵn sàng chạy test mới ngay lập tức**, vì:
+Các phần nền tảng đã được triển khai:
 
-- Các module chưa khai báo `spring-boot-starter-test` hoặc dependency JUnit tương đương.
-- Chưa có source directory hoặc test class trong `src/test/java`.
-- Chưa có Testcontainers và các dependency dành cho integration test.
-- Lệnh `mvn verify` hiện thành công nhưng báo `No tests to run`; kết quả này mới xác nhận source hiện tại biên dịch và đóng gói được, chưa xác nhận business behavior.
+- Campaign Service có `spring-boot-starter-test`, unit test domain và CSV parser.
+- `CampaignApiIT` chạy HTTP thật với PostgreSQL Testcontainers: migration, mapping, tenant isolation, idempotency, concurrency, constraints, scheduled activation và atomic outbox rollback.
+- `CampaignSecurityIT` kiểm tra JWT, scope, chữ ký sai, token hết hạn và thiếu tenant.
+- Surefire chạy `*Test`; Failsafe chạy `*IT` trong `verify`. Docker phải hoạt động; integration test không tự skip khi thiếu Docker.
 
-## 3. Thiết lập tối thiểu để bắt đầu
+## 3. Thiết lập kiểm thử
 
-Trong `backend/campaign-service/pom.xml`, thêm test dependency:
+Trong `backend/campaign-service/pom.xml` đã khai báo test dependency:
 
 ```xml
 <dependency>
@@ -61,9 +61,9 @@ Chạy toàn bộ kiểm tra backend:
 mvn -f backend/pom.xml clean verify
 ```
 
-## 4. Test đầu tiên nên viết
+## 4. Các invariant đã được bao phủ
 
-Thứ tự test nên đi từ invariant nhỏ đến state transition:
+Unit test đi từ invariant nhỏ đến state transition:
 
 1. Campaign mới được tạo ở trạng thái `DRAFT`.
 2. Tên và nội dung rỗng bị từ chối.
@@ -103,12 +103,15 @@ Sau khi viết test, phải chạy test và nhìn thấy nó thất bại vì pr
 
 - Phạm vi: JPA mapping, Flyway migration, repository, unique constraint và tenant isolation.
 - Dùng PostgreSQL Testcontainers thay vì H2 để hành vi gần production.
-- Triển khai sau khi domain model ổn định và persistence adapter được thêm vào.
+- Đã triển khai trong `CampaignApiIT`; database test tách biệt với database Compose local.
 
 ### Messaging integration test
 
 - Phạm vi: outbox publisher, Kafka event, RabbitMQ task, retry, acknowledgement và idempotency.
-- Triển khai sau REST API và persistence; không cần làm trước domain core.
+- `MessagingPipelineIT` đã kiểm tra PostgreSQL, Kafka và RabbitMQ: routing email/SMS, batching,
+  concurrent publishing, duplicate replay, broker outage, unroutable returns, rollback sau ack và DLT.
+- `NotificationWorkerIT` kiểm tra PostgreSQL/RabbitMQ/MailHog thật: SMTP, simulated SMS,
+  deduplication, bounded retry, DLQ, provider outage, rollback/requeue và confirm recovery.
 
 ### End-to-end test
 
@@ -127,4 +130,16 @@ Một business rule được xem là hoàn thành khi:
 
 ## 7. Bước tiếp theo
 
-Milestone gần nhất là thiết lập test dependency cho `campaign-service`, tạo `CampaignTest`, rồi triển khai Campaign domain theo từng vòng Red–Green–Refactor. Chưa cần kết nối PostgreSQL, Kafka hoặc RabbitMQ trong vòng TDD đầu tiên.
+Frontend đã có Auth/session/recovery và campaign/import/start/schedule/reporting. Đợt 14–15/10/2026: 21 unit tests, 14 Chromium tests và browser smoke qua Gateway, broker, Worker và Reporting thật đã qua. UI tests bao phủ VIEWER read-only, create/start retry keys, rejected/oversized CSV, row errors, page/filter reset, unknown counters, 403/404, Retry-After, escaped user content và mobile layout. `scripts/smoke-campaign-browser.ps1` kiểm email/SMS hoàn thành, MailHog, tenant isolation và backend scope denial; live suite không lưu trace/video/screenshot có credential. Backend cùng nền Monitoring chạy 190 tests không failure/error/skipped. Bước tiếp theo là member management và vận hành/identity hardening.
+
+Application service, JPA/Flyway adapter, REST API và pipeline Outbox → Kafka → RabbitMQ đã được triển khai.
+Chạy `./mvnw clean verify` (Windows: `.\mvnw.cmd`) từ `backend` để chạy unit và integration test với broker thật.
+Notification Worker đã có email MailHog/SMS giả lập, delivery state, duplicate task,
+manual acknowledgement, bounded retry và DLQ. Delivery-result outbox/Kafka, Campaign completion và Reporting
+đã có kiểm thử replay/concurrency, transaction rollback, broker outage, tenant isolation và JWT.
+`NotificationMigrationIT` kiểm tra backfill kết quả đã tồn tại; `scripts/smoke-delivery.ps1` kiểm tra luồng qua ba service.
+Auth có 48 tests về tenant/user/role, signing keys, JWT/JWKS, refresh lifecycle, last-admin protection, Redis quotas/proxy trust, encrypted OTP outbox và recovery. `RecoveryIT` dùng PostgreSQL/Redis/MailHog thật để kiểm expiry, guess limit, concurrent reset, rollback, session revocation, SMTP retry/notice và Redis outage. Gateway có 5 integration tests tải JWKS qua HTTP thật, kiểm JWT/scope và public recovery routes. Full backend `clean verify` ngày 06/10/2026 chạy **178 tests, 0 failures/errors/skipped**.
+
+Ngày 06/10/2026, `scripts/smoke-auth.ps1` đã qua 23 checks với bốn JAR độc lập; `scripts/smoke-auth-recovery.ps1` đã qua recovery qua Gateway/MailHog, normalized resend cooldown, password reset/notice, refresh revocation, replay và guess limit. Tại thời điểm đó, frontend/browser E2E chưa triển khai. SMTP acceptance không bảo đảm mailbox delivery.
+
+Ngày 11/10/2026, backend `verify` chạy lại **178 tests, 0 failures/errors/skipped**. Frontend Angular trên nhánh `quanvv/frontend-auth-gateway` có unit tests cho refresh concurrency, late 401, Retry-After, token boundary, logout/rotation và stale identity; Chromium suite có login/logout, recovery, 429/503, reload và mobile layout. `scripts/smoke-auth-browser.ps1` chạy browser → Gateway/Auth → PostgreSQL/Redis/MailHog thật: login, refresh, OTP email, password reset, revoke session và login bằng password mới. Unit/browser checks được bổ sung vào CI. Luồng browser campaign → CSV → start → reporting được bổ sung trong đợt 14–15/10 kể trên.
