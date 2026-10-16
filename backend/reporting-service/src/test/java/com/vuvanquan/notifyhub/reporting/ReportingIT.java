@@ -26,7 +26,7 @@ import static org.awaitility.Awaitility.await;
 
 @Testcontainers
 @ActiveProfiles({"local", "messaging"})
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "logging.level.org.apache.kafka=WARN")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"logging.level.org.apache.kafka=WARN","reporting.audit.enabled=true"})
 class ReportingIT {
     @Container static final PostgreSQLContainer DB = new PostgreSQLContainer("postgres:16-alpine");
     @Container static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0")
@@ -42,10 +42,19 @@ class ReportingIT {
     @Autowired ObjectMapper json;
     @Autowired KafkaTemplate<Object, Object> kafka;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired com.vuvanquan.notifyhub.reporting.projection.AuditProjection audits;
     @LocalServerPort int port;
     UUID tenant;
     UUID campaign;
     @BeforeEach void identities() { tenant = UUID.randomUUID(); campaign = UUID.randomUUID(); }
+    @Test void audit_consumer_deduplicates_kafka_events_and_quarantines_conflicting_identity() throws Exception {
+        var event=new IdentityAuditEvent(UUID.randomUUID(),1,"USER_CREATED",tenant,UUID.randomUUID(),UUID.randomUUID(),Instant.now());
+        for(int i=0;i<2;i++)kafka.send("notifyhub.identity.audit.v1",tenant.toString(),json.writeValueAsString(event)).get(15,TimeUnit.SECONDS);
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(()->assertThat(jdbc.queryForObject("SELECT count(*) FROM reporting.identity_audit WHERE event_id=?",Integer.class,event.eventId())).isEqualTo(1));
+        var conflict=new IdentityAuditEvent(event.eventId(),1,"ROLE_CHANGED",event.tenantId(),event.actorId(),event.subjectId(),event.occurredAt());
+        assertThatThrownBy(()->audits.apply(conflict)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.queryForObject("SELECT action FROM reporting.identity_audit WHERE event_id=?",String.class,event.eventId())).isEqualTo("USER_CREATED");
+    }
 
     @Test void projects_real_kafka_results_and_campaign_progress_with_tenant_scoped_http_reports() throws Exception {
         var sent = result("SENT");

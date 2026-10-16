@@ -23,6 +23,10 @@ spring:
       max-file-size: 2MB
       max-request-size: 3MB
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:

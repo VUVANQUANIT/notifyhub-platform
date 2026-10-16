@@ -24,10 +24,12 @@ public class PasswordRecovery {
     private final PasswordEncoder passwords;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
+    private final com.vuvanquan.notifyhub.auth.application.IdentityAudit audit;
     public PasswordRecovery(JdbcTemplate db, PlatformTransactionManager manager, RedisControls controls,
-            ControlProperties config, ControlCrypto crypto, PasswordEncoder passwords, Clock clock) {
+            ControlProperties config, ControlCrypto crypto, PasswordEncoder passwords, Clock clock, com.vuvanquan.notifyhub.auth.application.IdentityAudit audit) {
         this.db = db; this.tx = new TransactionTemplate(manager); this.controls = controls;
         this.config = config; this.crypto = crypto; this.passwords = passwords; this.clock = clock;
+        this.audit=audit;
     }
 
     public record Requested(UUID challengeId, String message) {}
@@ -87,6 +89,7 @@ public class PasswordRecovery {
                 db.update("UPDATE auth.recovery_challenges SET consumed_at=? WHERE id=?", Timestamp.from(now), challenge);
                 db.update("UPDATE auth.recovery_mail_outbox SET encrypted_code=NULL,state=CASE WHEN state='PENDING' THEN 'EXPIRED' ELSE state END,updated_at=? WHERE challenge_id=? AND kind='CODE'", Timestamp.from(now), challenge);
                 db.update("INSERT INTO auth.recovery_mail_outbox(challenge_id,kind,available_at) VALUES (?,'NOTICE',?)", challenge, Timestamp.from(now));
+                audit.record(tenant,user,user,"PASSWORD_RECOVERED");
             });
         } catch (DataAccessException unavailable) { throw ControlFailure.unavailable(); }
         // Cleanup is best effort AFTER commit. A remaining Redis proof cannot bypass the consumed DB receipt.

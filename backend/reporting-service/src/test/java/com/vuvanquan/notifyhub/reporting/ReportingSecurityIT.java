@@ -42,6 +42,16 @@ class ReportingSecurityIT {
     @org.springframework.beans.factory.annotation.Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
     @LocalServerPort int port;
     @Autowired ReportProjection projection;
+    @Autowired com.vuvanquan.notifyhub.reporting.projection.AuditProjection audits;
+
+    @Test void audit_requires_admin_scope_and_uses_bearer_tenant() throws Exception {
+        UUID tenant=UUID.randomUUID();UUID subject=UUID.randomUUID();
+        audits.apply(new com.vuvanquan.notifyhub.contracts.IdentityAuditEvent(UUID.randomUUID(),1,"USER_CREATED",tenant,UUID.randomUUID(),subject,Instant.now()));
+        assertThat(get(null,"/api/audit").statusCode()).isEqualTo(401);
+        assertThat(get(token(KEY,"reports:read",tenant.toString(),Instant.now().plusSeconds(60)),"/api/audit").statusCode()).isEqualTo(403);
+        assertThat(get(token(KEY,"users:read",tenant.toString(),Instant.now().plusSeconds(60)),"/api/audit").body()).contains(subject.toString());
+        assertThat(get(token(KEY,"users:read",UUID.randomUUID().toString(),Instant.now().plusSeconds(60)),"/api/audit").body()).doesNotContain(subject.toString());
+    }
 
     @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
         monitoringSnapshot.refresh();

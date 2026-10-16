@@ -27,11 +27,13 @@ public class MemberInvitations {
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
     private final String publicUrl;
+    private final IdentityAudit audit;
     public MemberInvitations(JdbcTemplate db, PlatformTransactionManager manager, IdentityService identities,
             PasswordEncoder passwords, ControlCrypto crypto, Clock clock,
-            @Value("${auth.invitation.public-url:http://localhost:4200}") String publicUrl) {
+            @Value("${auth.invitation.public-url:http://localhost:4200}") String publicUrl, IdentityAudit audit) {
         this.db=db; this.tx=new TransactionTemplate(manager); this.identities=identities;
         this.passwords=passwords; this.crypto=crypto; this.clock=clock;
+        this.audit=audit;
         URI uri=URI.create(publicUrl);
         if (uri.getHost()==null || uri.getUserInfo()!=null || uri.getQuery()!=null || uri.getFragment()!=null
                 || !(uri.getScheme().equals("https") || (uri.getScheme().equals("http") && Set.of("localhost","127.0.0.1").contains(uri.getHost()))))
@@ -59,6 +61,7 @@ public class MemberInvitations {
             UUID id=UUID.randomUUID();
             db.update("INSERT INTO auth.invitations(id,tenant_id,email,display_name,role,token_hash,expires_at) VALUES (?,?,?,?,?,?,?)",id,actor.tenantId(),normalized,displayName,role.name(),TokenIssuer.hash(token),Timestamp.from(clock.instant().plus(Duration.ofHours(24))));
             db.update("INSERT INTO auth.invitation_mail_outbox(invitation_id,encrypted_token) VALUES (?,?)",id,crypto.encrypt(token));
+            audit.record(actor.tenantId(),actor.userId(),id,"INVITE_ISSUED");
             return id;
         });
     }
@@ -67,6 +70,7 @@ public class MemberInvitations {
             lockTenant(actor.tenantId()); requireAdmin(actor);
             if (db.update("UPDATE auth.invitations SET revoked_at=coalesce(revoked_at,?) WHERE tenant_id=? AND id=? AND consumed_at IS NULL",Timestamp.from(clock.instant()),actor.tenantId(),id)==0)
                 throw new AuthFailure(HttpStatus.NOT_FOUND,"Pending invitation not found");
+            audit.record(actor.tenantId(),actor.userId(),id,"INVITE_REVOKED");
         });
     }
     public void accept(String token, String password) {
@@ -81,7 +85,9 @@ public class MemberInvitations {
                     || !((Timestamp)invitation.get("expires_at")).toInstant().isAfter(clock.instant())) throw AuthFailure.unauthorized();
             if (db.queryForObject("SELECT count(*) FROM auth.users WHERE tenant_id=? AND email=?",Integer.class,tenant,invitation.get("email"))>0)
                 throw AuthFailure.unauthorized();
-            db.update("INSERT INTO auth.users(id,tenant_id,email,display_name,password_hash,role,email_verified_at) VALUES (?,?,?,?,?,?,?)",UUID.randomUUID(),tenant,invitation.get("email"),invitation.get("display_name"),passwordHash,invitation.get("role"),Timestamp.from(clock.instant()));
+            UUID newUser=UUID.randomUUID();
+            db.update("INSERT INTO auth.users(id,tenant_id,email,display_name,password_hash,role,email_verified_at) VALUES (?,?,?,?,?,?,?)",newUser,tenant,invitation.get("email"),invitation.get("display_name"),passwordHash,invitation.get("role"),Timestamp.from(clock.instant()));
+            audit.record(tenant,newUser,(UUID)invitation.get("id"),"INVITE_ACCEPTED");
             db.update("UPDATE auth.invitations SET consumed_at=? WHERE id=?",Timestamp.from(clock.instant()),invitation.get("id"));
             // Publisher also locks tenant first, preventing accept/revoke from racing an SMTP send.
             db.update("UPDATE auth.invitation_mail_outbox SET encrypted_token=NULL,state=CASE WHEN state='PENDING' THEN 'EXPIRED' ELSE state END,updated_at=? WHERE invitation_id=?",Timestamp.from(clock.instant()),invitation.get("id"));
