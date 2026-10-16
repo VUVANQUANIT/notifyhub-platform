@@ -53,11 +53,84 @@ class RecoveryIT {
     @Autowired IdentityService identities;
     @Autowired JwtDecoder decoder;
     @Autowired JavaMailSenderImpl mail;
+    @Autowired MemberInvitations invitations;
+    @Autowired InvitationMailPublisher invitationPublisher;
     final ObjectMapper json = new ObjectMapper();
     final HttpClient client = HttpClient.newHttpClient();
     static final String OLD = "old long unique passphrase", NEW = "new long unique passphrase";
     AuthModels.Tokens tokens;
     UUID tenant, user;
+
+    @Test void invitation_verifies_mail_and_creates_only_once_with_real_smtp() throws Exception {
+        var actor=new AuthModels.Actor(tenant,user);
+        UUID id=invitations.invite(actor," INVITED@example.com ","Invited",Role.OPERATOR);
+        String token=invitationToken(id);
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.users",Integer.class)).isEqualTo(1);
+        assertThat(invitations.list(actor).toString()).doesNotContain(token);
+        assertThat(invitationPublisher.publishOne()).isTrue();
+        var received=client.send(HttpRequest.newBuilder(URI.create("http://"+MAIL.getHost()+":"+MAIL.getMappedPort(8025)+"/api/v2/search?kind=containing&query="+token)).GET().build(),HttpResponse.BodyHandlers.ofString());
+        assertThat(body(received).get("total").asInt()).isEqualTo(1);
+        assertThat(received.body()).contains("/activate#"+token,"tenant-one");
+        assertThat(db.queryForObject("SELECT encrypted_token FROM auth.invitation_mail_outbox WHERE invitation_id=?",String.class,id)).isNull();
+        assertThat(http("/api/auth/invitations/accept",Map.of("token",token,"password",NEW)).statusCode()).isEqualTo(204);
+        assertThat(identities.login("tenant-one","invited@example.com",NEW).accessToken()).isNotBlank();
+        assertThat(db.queryForObject("SELECT email_verified_at IS NOT NULL FROM auth.users WHERE email='invited@example.com'",Boolean.class)).isTrue();
+        assertThat(http("/api/auth/invitations/accept",Map.of("token",token,"password",OLD)).statusCode()).isEqualTo(401);
+        assertThat(invitations.list(actor).getFirst().state()).isEqualTo("ACCEPTED");
+    }
+
+    @Test void invitation_resend_revoke_expiry_tenant_disable_and_concurrency_are_enforced() throws Exception {
+        var actor=new AuthModels.Actor(tenant,user);
+        UUID first=invitations.invite(actor,"invited@example.com","Invited",Role.VIEWER); String old=invitationToken(first);
+        UUID second=invitations.invite(actor,"invited@example.com","Invited",Role.OPERATOR); String current=invitationToken(second);
+        assertThatThrownBy(()->invitations.accept(old,NEW)).isInstanceOf(AuthFailure.class);
+        invitations.revoke(actor,second);
+        assertThatThrownBy(()->invitations.accept(current,NEW)).isInstanceOf(AuthFailure.class);
+        UUID expired=invitations.invite(actor,"invited@example.com","Invited",Role.OPERATOR); String expiredToken=invitationToken(expired);
+        db.update("UPDATE auth.invitations SET expires_at=now()-interval '1 second' WHERE id=?",expired);
+        assertThatThrownBy(()->invitations.accept(expiredToken,NEW)).isInstanceOf(AuthFailure.class);
+        UUID latest=invitations.invite(actor,"invited@example.com","Invited",Role.VIEWER); String latestToken=invitationToken(latest);
+        db.update("UPDATE auth.tenants SET enabled=false WHERE id=?",tenant);
+        assertThatThrownBy(()->invitations.accept(latestToken,NEW)).isInstanceOf(AuthFailure.class);
+        db.update("UPDATE auth.tenants SET enabled=true WHERE id=?",tenant);
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var outcomes=executor.invokeAll(List.of(()->acceptInvitation(latestToken),()->acceptInvitation(latestToken)));
+            assertThat(List.of(outcomes.get(0).get(),outcomes.get(1).get())).containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.users WHERE email='invited@example.com'",Integer.class)).isEqualTo(1);
+        assertThatThrownBy(()->invitations.invite(actor,"invited@example.com","Invited",Role.ADMIN)).isInstanceOf(AuthFailure.class);
+    }
+    @Test void invitation_api_requires_live_admin_and_hides_other_tenants() throws Exception {
+        var actor=new AuthModels.Actor(tenant,user);
+        UUID id=invitations.invite(actor,"invited@example.com","Invited",Role.VIEWER);
+        var other=identities.register("tenant-two","Other","admin@example.com","Admin",OLD);
+        var otherJwt=decoder.decode(other.accessToken());
+        var otherActor=new AuthModels.Actor(UUID.fromString(otherJwt.getClaimAsString("tenant_id")),UUID.fromString(otherJwt.getSubject()));
+        assertThat(invitations.list(otherActor)).isEmpty();
+        assertThatThrownBy(()->invitations.revoke(otherActor,id)).isInstanceOf(AuthFailure.class);
+        identities.createUser(actor,"viewer@example.com","Viewer",OLD,Role.VIEWER);
+        var viewer=decoder.decode(identities.login("tenant-one","viewer@example.com",OLD).accessToken());
+        var viewerActor=new AuthModels.Actor(tenant,UUID.fromString(viewer.getSubject()));
+        assertThatThrownBy(()->invitations.invite(viewerActor,"blocked@example.com","Blocked",Role.ADMIN)).isInstanceOf(AuthFailure.class);
+        var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/auth/users/invitations"))
+            .header("Authorization","Bearer "+tokens.accessToken()).header("Content-Type","application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("email","api@example.com","displayName","API","role","VIEWER")))).build();
+        var response=client.send(request,HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(202); assertThat(response.body()).doesNotContain("token","password");
+    }
+    @Test void invitation_smtp_retry_is_bounded_and_revoked_email_is_not_sent() {
+        var actor=new AuthModels.Actor(tenant,user);
+        UUID id=invitations.invite(actor,"invited@example.com","Invited",Role.VIEWER);
+        mail.setPort(1);
+        for(int i=0;i<4;i++) { db.update("UPDATE auth.invitation_mail_outbox SET available_at=now()-interval '1 second'"); assertThat(invitationPublisher.publishOne()).isTrue(); }
+        assertThat(db.queryForObject("SELECT state FROM auth.invitation_mail_outbox WHERE invitation_id=?",String.class,id)).isEqualTo("FAILED");
+        assertThat(db.queryForObject("SELECT attempts FROM auth.invitation_mail_outbox WHERE invitation_id=?",Integer.class,id)).isEqualTo(4);
+        UUID revoked=invitations.invite(actor,"revoked@example.com","Revoked",Role.VIEWER); invitations.revoke(actor,revoked);
+        assertThat(invitationPublisher.publishOne()).isTrue();
+        assertThat(db.queryForObject("SELECT attempts FROM auth.invitation_mail_outbox WHERE invitation_id=?",Integer.class,revoked)).isZero();
+    }
+    private String invitationToken(UUID id) { return crypto.decrypt(db.queryForObject("SELECT encrypted_token FROM auth.invitation_mail_outbox WHERE invitation_id=?",String.class,id)); }
+    private boolean acceptInvitation(String token) { try { invitations.accept(token,NEW); return true; } catch(AuthFailure rejected) { return false; } }
 
     @BeforeEach void reset() {
         db.execute("DROP TRIGGER IF EXISTS reject_password ON auth.users");
