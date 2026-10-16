@@ -5,6 +5,8 @@ auth:
     replicas: ${KAFKA_TOPIC_REPLICAS:1}
 spring:
   kafka:
+    admin:
+      fail-fast: true
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer

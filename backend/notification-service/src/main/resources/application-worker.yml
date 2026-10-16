@@ -1,5 +1,9 @@
 spring:
   rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:notifyhub}
+    password: ${RABBITMQ_PASSWORD:notifyhub_local_password}
     publisher-confirm-type: correlated
     publisher-returns: true
     connection-timeout: 5s

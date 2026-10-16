@@ -1,0 +1,11 @@
+# Local k3d optimization. Input must be a freshly verified Boot JAR, named app.jar in a private build context.
+FROM eclipse-temurin:21-jre-jammy
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 notifyhub \
+    && useradd --system --uid 1001 --gid notifyhub --home-dir /app --shell /usr/sbin/nologin notifyhub
+WORKDIR /app
+COPY --chown=notifyhub:notifyhub app.jar app.jar
+USER 1001:1001
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]
