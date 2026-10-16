@@ -175,3 +175,10 @@ td a { color: #34533c; font-weight: 600; }
 .metric-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin: 28px 0; }.metric-grid article { border: 1px solid #dbe3d1; border-radius: 8px; padding: 20px; background: #eef2e7; }
 .metric-grid span { display: block; font-size: 12px; color: #63725e; }.metric-grid strong { display: block; font-size: 30px; margin-top: 14px; }.metric-grid .failure-metric { background: #fbf0e7; }.identifier { overflow-wrap: anywhere; }
 @media (max-width: 700px) { .workspace-layout { grid-template-rows: auto 1fr; }.metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.metric-grid article { padding: 15px; }.business-form { padding: 20px; }.welcome-row { flex-wrap: wrap; }.toolbar label { flex-wrap: wrap; }.pagination { font-size: 11px; } }
+
+.member-email { display: block; margin-top: 7px; color: $muted; font-size: 11px; }
+.member-actions { display: flex; flex-wrap: wrap; gap: 8px; min-width: 160px; }
+.member-dialog { width: min(520px, calc(100% - 32px)); padding: 28px; border: 1px solid $line; border-radius: 10px; background: #fdfdf9; color: $ink; }
+.member-dialog::backdrop { background: #15271db3; }
+.member-dialog h2 { font-size: 22px; }.member-dialog label { display: block; margin: 20px 0 8px; }.member-dialog select { width: 100%; }
+.member-dialog .field-hint { margin-top: 20px; }.member-dialog .toolbar { margin-bottom: 0; }

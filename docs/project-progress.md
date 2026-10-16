@@ -1,8 +1,8 @@
-# Tiến độ NotifyHub — 15/10/2026
+# Tiến độ NotifyHub — 17/10/2026
 
 ## Phạm vi đánh giá
 
-Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11/#12/#13/#15 đã merge vào `develop`: backend Campaign/Worker/Reporting, Auth/JWT/Redis/OTP, frontend Auth và Monitoring. Đợt này bổ sung UI campaign/import/start/schedule và reporting trên nhánh `quanvv/frontend-campaign-reporting`.
+Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11/#12/#13/#15/#16 đã merge vào `develop`; PR #17 đã tích hợp `develop` vào `main`. Nền hiện có: backend Campaign/Worker/Reporting, Auth/JWT/Redis/OTP, Monitoring và frontend campaign/reporting. Nhánh `quanvv/member-management` bổ sung UI quản lý thành viên ADMIN, cần review/merge để tích hợp phần mới.
 
 ## Hạng mục
 
@@ -13,11 +13,11 @@
 | Delivery | Hoàn thành local MVP | RabbitMQ manual ack, SMTP/MailHog, SMS giả lập, durable retry/DLQ, dedup, kết quả Kafka; chưa có provider SMS thật hoặc redrive admin API |
 | Reporting | Hoàn thành read model và UI MVP | Kafka projection, trạng thái/counters, API và UI phân trang/lọc, tenant/JWT checks; eventual consistency, làm mới thủ công |
 | Identity/Auth | Hoàn thành core và controls/recovery | Tenant/user/roles, PBKDF2, JWT/JWKS, refresh lifecycle và tenant isolation đã merge. Đã tích hợp: Redis quotas/fail-closed, OTP 8 chữ số/TTL/guess cap, encrypted email outbox, atomic password reset/session revoke/notice; còn MFA, email verification, history cleanup và key rotation |
-| Frontend | Hoàn thành luồng MVP | Angular Auth/session/recovery; danh sách/lọc/phân trang, create/import/start/schedule, lỗi CSV theo dòng, report counters/delivery filter, VIEWER read-only, Retry-After và stable retry keys. Chưa có member management, login MFA hoặc session persistence |
+| Frontend | Hoàn thành luồng MVP; member UI trên nhánh mới | Angular Auth/recovery và campaign/import/reporting. Nhánh mới: danh sách thành viên/phân trang, create, role/enabled confirmation, last-admin errors, stale-role handling và self-demotion logout. Còn invitation, first-login password change, login MFA và session persistence |
 | Observability/audit | Monitoring đã tích hợp; còn tracing/audit | Authenticated scrape, metrics nghiệp vụ/backlog, RabbitMQ queues/DLQ, Kafka group lag, Grafana và Alertmanager local; còn tracing, audit consumer và receiver bên ngoài |
 | Deployment/operations | Có CI, chưa hoàn thành | Thiếu k3d/Kubernetes manifests, cấu hình secret/deployment, backup/restore và operator redrive; các PR Dependabot đang mở cần được rà riêng |
 
-Luồng MVP đã chạy qua trình duyệt từ login đến tạo campaign, import CSV, SMTP/MailHog hoặc SMS giả lập, completion và báo cáo. Đây là MVP local có workflow dùng được; provider production, member management, audit/tracing và deployment/recovery vẫn cần hoàn thiện.
+Luồng MVP đã chạy qua trình duyệt từ login đến tạo campaign, import CSV, SMTP/MailHog hoặc SMS giả lập, completion và báo cáo. Nhánh mới hoàn thiện thao tác quản lý thành viên bằng API Auth sẵn có. Đây là MVP local; provider production, quy trình mời/cấp tài khoản, audit/tracing và deployment/recovery vẫn cần hoàn thiện.
 
 Kiểm chứng ngày 05/10/2026: full `clean verify` trên nhánh Auth chạy **151 tests, 0 failures/errors/skipped**, gồm 22 Auth tests và 4 Gateway tests mới. Smoke với bốn JAR độc lập và PostgreSQL riêng đã qua 23 checks: Auth phát token thật, Gateway và hai service kiểm JWKS/JWT, VIEWER không ghi hoặc quản lý user, tenant khác nhận 404, rotation/replay/logout đúng. Kiểm chứng trước đó ở PR #10 đã xác nhận email/SMS thành công; khi SMTP dừng, email FAILED sau 4 attempts còn SMS COMPLETED và Reporting phản ánh đúng cả hai.
 
@@ -29,9 +29,11 @@ Kiểm chứng ngày 13/10/2026 trên nhánh `quanvv/monitoring`: **190 tests, 0
 
 Kiểm chứng đợt 14–15/10/2026: PR #15 bị Trivy chặn ở Campaign/Notification/Reporting vì `at.yawk.lz4:lz4-java 1.10.1` (CVE-2026-106451 HIGH). Đã pin bản vá `1.11.4`, full backend **190 tests, 0 failures/errors/skipped**, CI #15 10/10 xanh. PR #13 cập nhật Monitoring, CI 9/9 xanh rồi merge. Frontend campaign/reporting có build production (~300 kB initial), **21 unit tests và 14 Chromium tests** qua; browser smoke với 5 JAR/PostgreSQL/Redis/Kafka/RabbitMQ/MailHog thật xác nhận email/SMS completion, CSV valid/duplicate/invalid rows, email MailHog, counters, cross-tenant 404 và VIEWER backend 403. Smoke dùng project/ports riêng và dọn JVM/container/network, giữ nguyên stack đang chạy của người dùng. Xem [frontend runbook](../frontend/README.md).
 
+Kiểm chứng ngày 17/10/2026 trên `quanvv/member-management`: production build thành công (~301 kB initial), **27 unit tests và 22 Chromium tests** qua. Live smoke riêng với 2 JAR Auth/Gateway và PostgreSQL/Redis/MailHog xác nhận last-admin role/disable 409, create/role/enable lifecycle, refresh session revocation, tenant 404, VIEWER 403 và self-demotion logout/login. Không thay đổi API/schema backend. Stack smoke/JVM được dọn sau test; log/key local được ignore. Phần mới chờ CI và review/merge.
+
 ## Thứ tự tiếp theo
 
-1. Member management UI cho ADMIN và hoàn thiện quy trình cấp tài khoản.
+1. Review/merge member management sau khi CI xanh; tiếp theo là email invitation, email verification và đổi mật khẩu lần đầu để hoàn thiện quy trình cấp tài khoản.
 2. History retention/cleanup, signing-key rotation, identity audit events, email verification và login MFA; secrets/Redis/SMTP/trusted proxy provisioning cho môi trường chung.
 3. Cấu hình deployment frontend same-origin/HTTPS, CSP và provider email/SMS production.
 4. Kiểm soát DLQ redrive với authorization và audit.

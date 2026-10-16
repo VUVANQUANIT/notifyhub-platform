@@ -5,6 +5,7 @@ export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./auth/login').then(m => m.Login) },
   { path: 'forgot-password', loadComponent: () => import('./auth/recovery').then(m => m.Recovery) },
   { path: 'workspace', canActivate: [authGuard], loadComponent: () => import('./workspace/workspace').then(m => m.Workspace) },
+  { path: 'members', canActivate: [authGuard], loadComponent: () => import('./members/members').then(m => m.Members) },
   { path: 'campaigns', canActivate: [authGuard], loadComponent: () => import('./campaigns/campaign-list').then(m => m.CampaignList) },
   { path: 'campaigns/new', canActivate: [authGuard], loadComponent: () => import('./campaigns/campaign-create').then(m => m.CampaignCreate) },
   { path: 'campaigns/:id', canActivate: [authGuard], loadComponent: () => import('./campaigns/campaign-detail').then(m => m.CampaignDetail) },

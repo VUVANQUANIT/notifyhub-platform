@@ -27,6 +27,8 @@ Smoke tạo hai tenant độc lập, ADMIN/VIEWER, campaign SMS ở trạng thá
 
 ## API
 
+Frontend ADMIN member management dùng trực tiếp các API user bên dưới: danh sách/phân trang, tạo tài khoản, đổi role và bật/tắt. UI xác nhận mutations, hiển thị lỗi ADMIN cuối cùng và xóa phiên local sau self-demotion/disable. Tạo user hiện vẫn do ADMIN đặt mật khẩu ban đầu; chưa có email invitation hoặc first-login password change. Xem [frontend runbook](../frontend/README.md#member-management) và `scripts/smoke-members-browser.ps1` để kiểm chứng bằng Gateway/Auth thật.
+
 Các POST/PUT nhận `application/json`; token được trả trong JSON, không đặt cookie. Những endpoint nhận credential chỉ hỗ trợ JSON, vì vậy browser simple form không đăng nhập/refresh được. Protected POST/PUT dùng `Authorization: Bearer <accessToken>`; không có session/form/basic authentication.
 
 | Method/path | Credential / quyền | Nội dung |
