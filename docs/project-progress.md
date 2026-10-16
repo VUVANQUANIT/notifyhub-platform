@@ -8,7 +8,7 @@ MVP đã có đủ Campaign → RabbitMQ Worker → SMTP/SMS → Kafka results �
 | 2. Bảo mật tài khoản | #20 — `quanvv/auth-hardening` | Code/kiểm thử xong, CI xanh. TOTP + 8 recovery codes dùng một lần, revoke refresh, reset password giữ MFA; public JWKS overlap/rotation; bounded retention |
 | 3. Audit/vận hành | #21 — `quanvv/operations-audit` | Code/kiểm thử xong, CI xanh. Transactional audit outbox/Kafka consumer/dedup/DLT, ADMIN audit API; audited/idempotent one-off redrive; OTLP/Tempo, webhook receiver đọc secret file |
 | 4. Triển khai/khôi phục | #22 — `quanvv/k3d-deployment` | Code/kiểm thử xong, CI xanh. K3d riêng: 12 pod Ready, 45 resource valid, HTTPS/CSP/Trusted Types, secret/DB roles riêng, bootstrap không mở registration, encrypted backup + isolated restore |
-| 5. Provider thực tế | #23 — `quanvv/delivery-providers` | SMTP STARTTLS/auth/hostname guard, Twilio API-key adapter, safe errors, bounded response/timeouts, Retry-After trong trần retry; tests local protocol/worker và Spring provider selection đã qua. CI đang chạy; activation thật cần credentials |
+| 5. Provider thực tế | #23 — `quanvv/delivery-providers` | SMTP STARTTLS/auth/hostname guard, Twilio API-key adapter, safe errors, bounded response/timeouts, Retry-After trong trần retry; tests local protocol/worker và Spring provider selection đã qua. Kết quả CI hiện tại xem PR #23; activation thật cần credentials |
 
 ## Bằng chứng kiểm thử
 

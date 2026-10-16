@@ -31,6 +31,10 @@ if($Service -eq 'notification'){
         if($hasFrom -eq $hasService -or ($hasFrom -and $data.TWILIO_FROM -notmatch '^\+[1-9]\d{7,14}$') -or ($hasService -and $data.TWILIO_MESSAGING_SERVICE_SID -notmatch '^MG[0-9a-fA-F]{32}$')){throw 'Choose exactly one valid Twilio sender or Messaging Service'}
     }
 }
+# Persist security flags in the Secret too, so reapplying a base Deployment cannot downgrade SMTP.
+$data["${prefix}_PORT"]='587'
+$data["${prefix}_AUTH"]='true'
+$data["${prefix}_STARTTLS"]='true'
 Write-Output "Validated provider keys for ${Service}: $($data.Keys -join ', ') (values are not printed)"
 if($ValidateOnly){return}
 $encoded=@{};foreach($key in $data.Keys){$encoded[$key]=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($data[$key]))}

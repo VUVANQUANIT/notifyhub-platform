@@ -19,4 +19,3 @@ public class MailProviderGuard {
         catch(Exception invalid){throw new IllegalArgumentException("A valid SMTP sender address is required");}
     }
 }
-
