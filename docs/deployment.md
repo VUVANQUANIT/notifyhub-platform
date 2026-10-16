@@ -36,6 +36,8 @@ The live browser test uses only generated local credentials and test recipients.
 
 ## Backup and recovery
 
+Tempo uses a 1 GiB memory limit, a 768 MiB Go soft limit, one flush worker and small Parquet row groups for this local workload. The former 256 MiB limit could pass readiness and then OOM during block completion. Keep the PVC during recovery; check successful `block completed`/`flushing block` logs and query a known trace after a pod restart. These limits are local validation defaults, not production capacity estimates. The Compose tracing overlay uses the same bounds.
+
 ```powershell
 ./scripts/backup-k3d.ps1 -NodeExecutable node
 ./scripts/verify-k3d-restore.ps1 -Backup .env.k3d/backups/<archive>.nhb -NodeExecutable node

@@ -506,6 +506,9 @@ spec:
         -
           name: "tempo"
           image: "grafana/tempo:2.6.1"
+          env:
+            - name: "GOMEMLIMIT"
+              value: "768MiB"
           ports:
             -
               name: "service"
@@ -513,10 +516,10 @@ spec:
           resources:
             requests:
               cpu: "50m"
-              memory: "64Mi"
+              memory: "256Mi"
             limits:
               cpu: "1"
-              memory: "256Mi"
+              memory: "1Gi"
           readinessProbe:
             timeoutSeconds: 10
             httpGet:
@@ -573,4 +576,4 @@ kind: "ConfigMap"
 metadata:
   name: "tempo-config"
 data:
-  tempo.yml: "server:\n  http_listen_port: 3200\ndistributor:\n  receivers:\n    otlp:\n      protocols:\n        http:\n          endpoint: 0.0.0.0:4318\nstorage:\n  trace:\n    backend: local\n    wal:\n      path: /var/tempo/wal\n    local:\n      path: /var/tempo/blocks\ncompactor:\n  compaction:\n    block_retention: 72h\n"
+  tempo.yml: "server:\n  http_listen_port: 3200\ndistributor:\n  receivers:\n    otlp:\n      protocols:\n        http:\n          endpoint: 0.0.0.0:4318\ningester:\n  concurrent_flushes: 1\n  max_block_bytes: 1048576\n  max_block_duration: 1m\nstorage:\n  trace:\n    backend: local\n    pool:\n      max_workers: 4\n      queue_depth: 100\n    block:\n      parquet_row_group_size_bytes: 1048576\n    search:\n      read_buffer_count: 2\n      read_buffer_size_bytes: 1048576\n    wal:\n      path: /var/tempo/wal\n    local:\n      path: /var/tempo/blocks\ncompactor:\n  compaction:\n    block_retention: 72h\n"
