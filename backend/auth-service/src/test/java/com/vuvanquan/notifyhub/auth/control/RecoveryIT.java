@@ -55,11 +55,55 @@ class RecoveryIT {
     @Autowired JavaMailSenderImpl mail;
     @Autowired MemberInvitations invitations;
     @Autowired InvitationMailPublisher invitationPublisher;
+    @Autowired MfaService mfa;
+    @Autowired IdentityRetention retention;
     final ObjectMapper json = new ObjectMapper();
     final HttpClient client = HttpClient.newHttpClient();
     static final String OLD = "old long unique passphrase", NEW = "new long unique passphrase";
     AuthModels.Tokens tokens;
     UUID tenant, user;
+
+    @Test void mfa_requires_password_and_single_use_factor_and_revokes_existing_sessions() {
+        var actor=new AuthModels.Actor(tenant,user);
+        assertThatThrownBy(()->mfa.begin(actor,"wrong")).isInstanceOf(AuthFailure.class);
+        var enrollment=mfa.begin(actor,OLD);
+        assertThat(db.queryForObject("SELECT mfa_pending_secret FROM auth.users WHERE id=?",String.class,user)).doesNotContain(enrollment.secret());
+        assertThatThrownBy(()->mfa.confirm(actor,"invalid")).isInstanceOf(AuthFailure.class);
+        var codes=mfa.confirm(actor,Totp.code(enrollment.secret(),Instant.now().getEpochSecond()/30));
+        assertThat(codes).hasSize(8);assertThat(mfa.enabled(actor)).isTrue();
+        assertThatThrownBy(()->identities.refresh(tokens.refreshToken())).isInstanceOf(AuthFailure.class);
+        assertThatThrownBy(()->identities.login("tenant-one","admin@example.com",OLD)).isInstanceOf(AuthFailure.class);
+        assertThat(identities.login("tenant-one","admin@example.com",OLD,codes.getFirst()).accessToken()).isNotBlank();
+        assertThatThrownBy(()->identities.login("tenant-one","admin@example.com",OLD,codes.getFirst())).isInstanceOf(AuthFailure.class);
+        // Wrong password cannot consume a valid recovery factor.
+        assertThatThrownBy(()->identities.login("tenant-one","admin@example.com","wrong",codes.get(1))).isInstanceOf(AuthFailure.class);
+        assertThat(identities.login("tenant-one","admin@example.com",OLD,codes.get(1)).accessToken()).isNotBlank();
+        mfa.disable(actor,OLD,codes.get(2));assertThat(mfa.enabled(actor)).isFalse();
+        assertThat(identities.login("tenant-one","admin@example.com",OLD).accessToken()).isNotBlank();
+    }
+    @Test void recovery_password_reset_cannot_bypass_mfa_and_enrollment_expires() {
+        var actor=new AuthModels.Actor(tenant,user);var expiredEnrollment=mfa.begin(actor,OLD);
+        db.update("UPDATE auth.users SET mfa_pending_expires_at=now()-interval '1 second' WHERE id=?",user);
+        assertThatThrownBy(()->mfa.confirm(actor,Totp.code(expiredEnrollment.secret(),Instant.now().getEpochSecond()/30))).isInstanceOf(AuthFailure.class);
+        var enrollment=mfa.begin(actor,OLD);var codes=mfa.confirm(actor,Totp.code(enrollment.secret(),Instant.now().getEpochSecond()/30));
+        var challenge=issue();recovery.reset(challenge,code(challenge),NEW);
+        assertThatThrownBy(()->identities.login("tenant-one","admin@example.com",NEW)).isInstanceOf(AuthFailure.class);
+        assertThat(identities.login("tenant-one","admin@example.com",NEW,codes.getFirst()).accessToken()).isNotBlank();
+    }
+    @Test void retention_keeps_live_replay_receipts_and_deletes_only_expired_history() {
+        var rotated=identities.refresh(tokens.refreshToken());var actor=new AuthModels.Actor(tenant,user);
+        var challenge=issue();UUID invitation=invitations.invite(actor,"expire@example.com","Expired",Role.VIEWER);
+        db.update("UPDATE auth.recovery_challenges SET expires_at=now()-interval '31 days' WHERE id=?",challenge);
+        db.update("UPDATE auth.invitations SET expires_at=now()-interval '31 days' WHERE id=?",invitation);
+        retention.clean();
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.recovery_challenges",Integer.class)).isZero();
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.invitations",Integer.class)).isZero();
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.refresh_tokens",Integer.class)).isEqualTo(2);
+        assertThatThrownBy(()->identities.refresh(tokens.refreshToken())).isInstanceOf(AuthFailure.class);
+        assertThatThrownBy(()->identities.refresh(rotated.refreshToken())).isInstanceOf(AuthFailure.class);
+        db.update("UPDATE auth.refresh_sessions SET expires_at=now()-interval '1 second'");retention.clean();
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.refresh_tokens",Integer.class)).isZero();
+    }
 
     @Test void invitation_verifies_mail_and_creates_only_once_with_real_smtp() throws Exception {
         var actor=new AuthModels.Actor(tenant,user);

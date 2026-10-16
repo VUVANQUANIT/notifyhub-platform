@@ -24,6 +24,7 @@ export class Login {
     email: ['', [Validators.required, Validators.email, Validators.maxLength(254)]],
     // Existing credentials are validated by the issuer, not by a new-password policy.
     password: ['', [Validators.required, Validators.maxLength(128)]],
+    code: ['', [Validators.maxLength(43)]],
   });
 
   invalid(name: 'tenantSlug' | 'email' | 'password'): boolean {
@@ -38,6 +39,7 @@ export class Login {
     this.auth.login(this.form.getRawValue()).pipe(finalize(() => this.state.busy.set(false))).subscribe({
       next: () => {
         this.form.controls.password.reset();
+        this.form.controls.code.reset();
         void this.router.navigate(['/workspace']);
       },
       error: error => this.state.fail(error, 'Không thể đăng nhập. Kiểm tra mã tổ chức, email và mật khẩu.'),
