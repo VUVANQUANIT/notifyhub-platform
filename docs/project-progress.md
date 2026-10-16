@@ -8,6 +8,8 @@ Tiếp theo trong đợt này: (2) MFA/rotation/retention, (3) audit/tracing/red
 
 Hạng mục 2 trên `quanvv/auth-hardening`: MFA TOTP và 8 recovery codes dùng một lần, UI enrollment/login/disable, revoke refresh, password recovery không bypass MFA; overlap public JWKS và runbook rotation; hourly bounded retention. Production build, 27 frontend unit tests và 28 Chromium tests qua. Auth verify bổ sung RFC vectors, rotation, MFA lifecycle và retention. Xem [hardening](auth-hardening.md).
 
+Hạng mục 3 trên `quanvv/operations-audit`: identity audit transactional outbox → Kafka → Reporting (dedup/DLT), ADMIN tenant-scoped audit API, metrics backlog; ADMIN audited/idempotent redrive từ durable dead-letter handoff với delivery ID mới và lịch sử riêng; OTLP tracing/Tempo và receiver Alertmanager webhook đọc secret file. Recovery không ghi đè kết quả campaign terminal. Backend integration đang chạy; receiver thật cần provision URL/token. Xem [operations](operations-audit.md).
+
 ## Phạm vi đánh giá
 
 Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11/#12/#13/#15/#16 đã merge vào `develop`; PR #17 đã tích hợp `develop` vào `main`. Nền hiện có: backend Campaign/Worker/Reporting, Auth/JWT/Redis/OTP, Monitoring và frontend campaign/reporting. Nhánh `quanvv/member-management` bổ sung UI quản lý thành viên ADMIN, cần review/merge để tích hợp phần mới.

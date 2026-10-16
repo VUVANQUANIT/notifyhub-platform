@@ -57,11 +57,32 @@ class RecoveryIT {
     @Autowired InvitationMailPublisher invitationPublisher;
     @Autowired MfaService mfa;
     @Autowired IdentityRetention retention;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     final ObjectMapper json = new ObjectMapper();
     final HttpClient client = HttpClient.newHttpClient();
     static final String OLD = "old long unique passphrase", NEW = "new long unique passphrase";
     AuthModels.Tokens tokens;
     UUID tenant, user;
+
+    @Test void audit_outbox_is_redacted_transactional_and_retries_publication() {
+        String envelope=db.queryForObject("SELECT envelope FROM auth.audit_outbox LIMIT 1",String.class);
+        assertThat(envelope).contains("TENANT_REGISTERED").doesNotContain(OLD,"admin@example.com",tokens.accessToken(),tokens.refreshToken());
+        var kafka=org.mockito.Mockito.mock(org.springframework.kafka.core.KafkaTemplate.class);
+        org.mockito.Mockito.when(kafka.send(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker offline")));
+        var publisher=new AuditPublisher(db,transactions,kafka,"notifyhub.identity.audit.v1",Clock.systemUTC());
+        assertThat(publisher.publishOne()).isTrue();
+        assertThat(db.queryForObject("SELECT published_at IS NULL AND attempts=1 FROM auth.audit_outbox LIMIT 1",Boolean.class)).isTrue();
+        db.update("UPDATE auth.audit_outbox SET available_at=now()-interval '1 second'");
+        org.mockito.Mockito.when(kafka.send(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(new org.springframework.kafka.support.SendResult<>(null,null)));
+        assertThat(publisher.publishOne()).isTrue();
+        assertThat(db.queryForObject("SELECT published_at IS NOT NULL AND attempts=2 FROM auth.audit_outbox LIMIT 1",Boolean.class)).isTrue();
+        int count=db.queryForObject("SELECT count(*) FROM auth.audit_outbox",Integer.class);
+        assertThatThrownBy(()->new org.springframework.transaction.support.TransactionTemplate(transactions).execute(status->{identities.createUser(new AuthModels.Actor(tenant,user),"rollback@example.com","Rollback",NEW,Role.VIEWER);throw new IllegalStateException("rollback");})).isInstanceOf(IllegalStateException.class);
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.audit_outbox",Integer.class)).isEqualTo(count);
+        assertThat(db.queryForObject("SELECT count(*) FROM auth.users WHERE email='rollback@example.com'",Integer.class)).isZero();
+    }
 
     @Test void mfa_requires_password_and_single_use_factor_and_revokes_existing_sessions() {
         var actor=new AuthModels.Actor(tenant,user);

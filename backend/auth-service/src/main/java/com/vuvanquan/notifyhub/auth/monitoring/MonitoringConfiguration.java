@@ -28,6 +28,10 @@ public class MonitoringConfiguration {
         return new DatabaseMetrics(new JdbcTemplate(dataSource), registry, sql, List.of(
                 gauge("recovery_mail_pending", "notifyhub.pipeline.pending", "Recovery mail waiting for publishing", "queue", "recovery_mail"),
                 gauge("recovery_mail_age", "notifyhub.pipeline.oldest.seconds", "Overdue age of oldest recovery mail", "queue", "recovery_mail"),
-                gauge("recovery_mail_failed", "notifyhub.auth.recovery.mail.failed", "Retained failed recovery mail")), Clock.systemUTC(), maxAgeMillis);
+                gauge("recovery_mail_failed", "notifyhub.auth.recovery.mail.failed", "Retained failed recovery mail"),
+                gauge("audit_pending", "notifyhub.pipeline.pending", "Audit events waiting for publishing", "queue", "identity_audit"),
+                gauge("audit_age", "notifyhub.pipeline.oldest.seconds", "Overdue age of oldest audit event", "queue", "identity_audit"),
+                gauge("invitation_pending", "notifyhub.pipeline.pending", "Invitation mail waiting for publishing", "queue", "invitation_mail"),
+                gauge("invitation_age", "notifyhub.pipeline.oldest.seconds", "Overdue age of oldest invitation", "queue", "invitation_mail")), Clock.systemUTC(), maxAgeMillis);
     }
 }
