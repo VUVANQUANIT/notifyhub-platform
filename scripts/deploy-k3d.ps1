@@ -20,5 +20,6 @@ try{
     foreach($service in @('postgres','redis','rabbitmq','kafka','mailhog','tempo')){Native kubectl --kubeconfig $config -n notifyhub rollout status "deployment/$service" --timeout=300s}
     foreach($service in @('api-gateway','auth-service','campaign-service','notification-service','reporting-service','frontend')){Native kubectl --kubeconfig $config -n notifyhub rollout restart "deployment/$service";Native kubectl --kubeconfig $config -n notifyhub rollout status "deployment/$service" --timeout=300s}
     & "$PSScriptRoot/bootstrap-k3d-admin.ps1" -Kubeconfig $config
+    & "$PSScriptRoot/verify-k3d-network.ps1" -Kubeconfig $config
     Write-Output 'NotifyHub: https://notifyhub.localhost:8443 (local self-signed certificate). Your default kubeconfig/context was not changed.'
 }finally{Pop-Location}

@@ -25,13 +25,14 @@ Auth's proxy trust remains empty by default: IP quotas aggregate at Gateway, whi
 ```powershell
 kubectl --kubeconfig .env.k3d/kubeconfig -n notifyhub get pods,pvc
 kubectl kustomize infra/k8s/overlays/k3d | docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0 -strict -summary -kubernetes-version 1.35.0
+./scripts/verify-k3d-network.ps1
 kubectl --kubeconfig .env.k3d/kubeconfig -n notifyhub port-forward service/mailhog 38025:8025
 # In another terminal, with Node 24 and frontend dependencies installed:
 cd frontend
 node node_modules/@playwright/test/cli.js test --config playwright.k3d.config.ts
 ```
 
-The live browser test uses only generated local credentials and test recipients. It validates real HTTPS/CSP, email invitation/activation, MFA recovery, audit projection and email campaign completion. Traces can be inspected with a temporary operator-only port-forward to Tempo 3200. Do not publish that unauthenticated infrastructure endpoint. NetworkPolicies intentionally keep ordinary app ports private; test direct DB access from an unauthorized pod is denied.
+The live browser test uses only generated local credentials and test recipients. It validates real HTTPS/CSP, email invitation/activation, MFA recovery, audit projection and email campaign completion. Traces can be inspected using `kubectl --kubeconfig .env.k3d/kubeconfig -n notifyhub port-forward deployment/tempo 33200:3200`. Do not publish that unauthenticated infrastructure endpoint. The network verification script requires a successful frontend → Gateway connection and rejects frontend access to database Service/pod IP, Redis, brokers and Auth directly; it also checks separate database role permissions. Ingress and egress policies are separate: a live probe caught overly broad access with a combined policy on the tested CNI, even though schema validation passed. Deployment now runs the positive/negative probes before reporting success. The final overlay contains 46 resources.
 
 ## Backup and recovery
 
