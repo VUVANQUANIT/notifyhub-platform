@@ -5,7 +5,7 @@ import { AuthService } from './auth.service';
 
 const PUBLIC = new Set([
   '/api/auth/login', '/api/auth/register', '/api/auth/refresh', '/api/auth/logout',
-  '/api/auth/password/forgot', '/api/auth/password/reset',
+  '/api/auth/password/forgot', '/api/auth/password/reset', '/api/auth/invitations/accept',
 ]);
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {

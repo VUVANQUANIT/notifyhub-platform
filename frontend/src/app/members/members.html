@@ -1,6 +1,7 @@
 <app-shell section="Thành viên">
   <div class="welcome-row"><div><span class="section-number">CÙNG NHAU KẾT NỐI</span><h1>Thành viên<span class="accent">.</span></h1><p>Quản lý tài khoản và quyền truy cập trong {{ auth.tenant()?.name }}.</p></div>@if (canManage) { <button class="action-link" type="button" [disabled]="blocked" (click)="beginCreate()">Thêm thành viên</button> }</div>
   <div class="workspace-divider"></div>
+  @if (canManage) { <p><a class="action-link" routerLink="/invitations">Mời thành viên qua email</a></p> }
   <div class="toolbar"><button class="secondary-button" type="button" [disabled]="read.blocked || write.busy()" (click)="load()">{{ uncertain() ? 'Kiểm tra danh sách' : 'Làm mới thành viên' }}</button>@if (read.remaining() || write.remaining()) { <span class="field-hint" role="status">Thử lại sau {{ read.remaining() || write.remaining() }} giây.</span> }</div>
   @if (read.busy()) { <p role="status">Đang kiểm tra quyền và tải thành viên…</p> }
   @if (read.error()) { <div class="notice error" role="alert">{{ read.error() }} @if (!canManage && !read.busy()) { Chỉ ADMIN được quản lý thành viên. Đăng nhập lại nếu quyền vừa thay đổi. }</div> }
@@ -9,7 +10,7 @@
 
   @if (canManage && showCreate()) {
     <form class="business-form member-form" [formGroup]="form" (ngSubmit)="create()">
-      <h2>Tạo tài khoản thành viên</h2><p class="field-hint">ADMIN đặt mật khẩu ban đầu. Chia sẻ qua kênh riêng; hệ thống chưa gửi email mời hoặc bắt buộc đổi mật khẩu lần đầu.</p>
+      <h2>Tạo tài khoản thành viên</h2><p class="field-hint">ADMIN đặt mật khẩu ban đầu cho tài khoản cấp trực tiếp. Dùng lời mời qua email để thành viên tự đặt mật khẩu và xác minh email.</p>
       <fieldset [disabled]="write.busy() || uncertain()">
         <label for="member-name">Tên hiển thị</label><input id="member-name" formControlName="displayName" maxlength="100" autocomplete="off" required>
         <label for="member-email">Email thành viên</label><input id="member-email" formControlName="email" type="email" maxlength="254" autocomplete="off" required>

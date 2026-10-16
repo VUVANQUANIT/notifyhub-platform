@@ -41,6 +41,8 @@ auth:
   audience: ${JWT_AUDIENCE:notifyhub}
   access-ttl: 5m
   refresh-ttl: 7d
+  invitation:
+    public-url: ${AUTH_PUBLIC_URL:http://localhost:4200}
   control:
     secret-path: ${AUTH_CONTROL_SECRET_PATH}
     trusted-proxy-addresses: ${AUTH_TRUSTED_PROXY_ADDRESSES:}
