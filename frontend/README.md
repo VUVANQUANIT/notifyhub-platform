@@ -1,6 +1,6 @@
 # NotifyHub Web
 
-Angular 22 standalone application for the NotifyHub tenant workspace: login/logout, in-memory token lifecycle, email OTP recovery, account/tenant overview, campaign creation/CSV import/start/schedule and delivery reporting.
+Angular 22 standalone application for the NotifyHub tenant workspace: login/logout, in-memory token lifecycle, email OTP recovery, account/tenant overview, campaign creation/CSV import/start/schedule, delivery reporting and ADMIN member management.
 
 ## Run locally
 
@@ -83,5 +83,23 @@ $env:NOTIFYHUB_MAILHOG_URL = 'http://127.0.0.1:28025'
 # From frontend:
 npm run e2e:campaign
 ```
+
+## Member management
+
+ADMIN sees **Thành viên** in both workspace navigation and the shared shell. `/members` verifies current identity before loading `/api/auth/users`; the Auth page contract uses `total` (not Reporting's `totalElements`). ADMIN can create a user, assign ADMIN/OPERATOR/VIEWER, change role, disable or re-enable. Mutations require an explicit modal confirmation except account creation, which has its own form. Native modal focus/Escape behavior and mobile layout are covered in Chromium.
+
+The initial password follows the issuer's policy: at least 15 Unicode code points, at most 128 UTF-16 code units, with matching confirmation. Email/name are normalized without changing password whitespace. Password/confirmation fields are cleared once submitted; credentials are not stored in browser storage or feedback. This creates accounts with an ADMIN-chosen password; email invitation, first-login password change and email verification remain separate work.
+
+Backend tenant/ADMIN checks remain authoritative. A last-enabled-ADMIN conflict is shown explicitly without exposing raw server text. When the current user successfully demotes/disables themselves, local tokens/identity are cleared and login is required again. A 403 clears the member data/actions and refreshes identity so a stale ADMIN screen cannot continue operating. Refresh sessions are revoked by the existing Auth transaction; already issued downstream access tokens retain their documented short lifetime.
+
+Create/PUT requests are never automatically resubmitted by the page. An ambiguous network/5xx result locks further member writes until a successful manual list check; the operator must inspect the email/current state before deciding on another request. The server's tenant/email uniqueness protects a repeated create. The existing auth interceptor may retry once after an authentication rejection; member routes still require backend authorization. 429/503 respects Retry-After. Canceling/navigation does not undo a request already accepted by the server.
+
+Run a real Gateway/Auth/PostgreSQL/Redis/MailHog member smoke from the repository root:
+
+```powershell
+powershell -NoProfile -File scripts/smoke-members-browser.ps1
+```
+
+`-SkipBuild`, `-NodeExecutable` and `-JavaExecutable` work like the campaign smoke. The isolated `notifyhub-members-browser` project uses PostgreSQL 35432, Redis 36379, SMTP 31025, MailHog 38025, Auth/Gateway 38081/38080 and Angular 4201. It tests last-admin role/disable conflicts, member create/role/enable lifecycle, refresh revocation, cross-tenant 404, VIEWER scope denial and self-demotion/login. JVMs/containers/network are removed after the run; ignored logs are in `test-results/member-services`, keys in `.env.members-browser-smoke`. Live credential traces/screenshots/video stay disabled. With an existing compatible stack, set `NOTIFYHUB_GATEWAY_URL` then run `npm run e2e:members` in frontend.
 
 Implementation references: [Angular functional interceptors](https://angular.dev/guide/http/interceptors), [route guards](https://angular.dev/guide/routing/route-guards), [development proxy](https://angular.dev/tools/cli/serve).

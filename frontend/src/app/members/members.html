@@ -1,0 +1,49 @@
+<app-shell section="Thành viên">
+  <div class="welcome-row"><div><span class="section-number">CÙNG NHAU KẾT NỐI</span><h1>Thành viên<span class="accent">.</span></h1><p>Quản lý tài khoản và quyền truy cập trong {{ auth.tenant()?.name }}.</p></div>@if (canManage) { <button class="action-link" type="button" [disabled]="blocked" (click)="beginCreate()">Thêm thành viên</button> }</div>
+  <div class="workspace-divider"></div>
+  <div class="toolbar"><button class="secondary-button" type="button" [disabled]="read.blocked || write.busy()" (click)="load()">{{ uncertain() ? 'Kiểm tra danh sách' : 'Làm mới thành viên' }}</button>@if (read.remaining() || write.remaining()) { <span class="field-hint" role="status">Thử lại sau {{ read.remaining() || write.remaining() }} giây.</span> }</div>
+  @if (read.busy()) { <p role="status">Đang kiểm tra quyền và tải thành viên…</p> }
+  @if (read.error()) { <div class="notice error" role="alert">{{ read.error() }} @if (!canManage && !read.busy()) { Chỉ ADMIN được quản lý thành viên. Đăng nhập lại nếu quyền vừa thay đổi. }</div> }
+  @if (write.error() && !selection()) { <div class="notice error" role="alert">{{ write.error() }}</div> }
+  @if (feedback()) { <p class="notice" role="status">{{ feedback() }}</p> }
+
+  @if (canManage && showCreate()) {
+    <form class="business-form member-form" [formGroup]="form" (ngSubmit)="create()">
+      <h2>Tạo tài khoản thành viên</h2><p class="field-hint">ADMIN đặt mật khẩu ban đầu. Chia sẻ qua kênh riêng; hệ thống chưa gửi email mời hoặc bắt buộc đổi mật khẩu lần đầu.</p>
+      <fieldset [disabled]="write.busy() || uncertain()">
+        <label for="member-name">Tên hiển thị</label><input id="member-name" formControlName="displayName" maxlength="100" autocomplete="off" required>
+        <label for="member-email">Email thành viên</label><input id="member-email" formControlName="email" type="email" maxlength="254" autocomplete="off" required>
+        <label for="member-role">Quyền truy cập</label><select id="member-role" formControlName="role">@for (role of roles; track role) { <option [value]="role">{{ role }} — {{ labels[role] }}</option> }</select>
+        <label for="member-password">Mật khẩu ban đầu</label><input id="member-password" formControlName="password" type="password" autocomplete="new-password" maxlength="128" required>
+        <label for="member-confirm">Nhập lại mật khẩu</label><input id="member-confirm" formControlName="confirm" type="password" autocomplete="new-password" maxlength="128" required>
+      </fieldset>
+      @if (form.touched && form.invalid && !write.busy()) { <p class="notice error" role="alert">Điền tên và email hợp lệ. Hai mật khẩu phải giống nhau, ít nhất 15 ký tự.</p> }
+      <div class="toolbar"><button class="primary-button compact-button" type="submit" [disabled]="blocked || form.invalid">{{ write.busy() ? 'Đang tạo…' : 'Tạo tài khoản' }}</button><button class="secondary-button" type="button" [disabled]="write.busy()" (click)="cancelCreate()">Hủy tạo tài khoản</button></div>
+    </form>
+  }
+
+  @if (result(); as data) {
+    <div class="table-wrap"><table><caption>{{ data.total }} thành viên trong tổ chức</caption><thead><tr><th>Tài khoản</th><th>Quyền truy cập</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+      @for (member of data.items; track member.id) {
+        <tr><td><strong>{{ member.displayName }}</strong> @if (member.id === auth.user()?.id) { <span class="tag">Bạn</span> }<span class="member-email">{{ member.email }}</span></td><td>{{ member.role }}<span class="member-email">{{ labels[member.role] }}</span></td><td><span class="status-tag" [class.failed]="!member.enabled">{{ member.enabled ? 'Đang hoạt động' : 'Đã vô hiệu hóa' }}</span></td><td><div class="member-actions"><button type="button" class="secondary-button" [disabled]="blocked" [attr.aria-label]="'Đổi quyền ' + member.email" (click)="edit(member, 'role')">Đổi quyền</button><button type="button" class="secondary-button" [disabled]="blocked" [attr.aria-label]="(member.enabled ? 'Vô hiệu hóa ' : 'Kích hoạt ') + member.email" (click)="edit(member, 'enabled')">{{ member.enabled ? 'Vô hiệu hóa' : 'Kích hoạt' }}</button></div></td></tr>
+      } @empty { <tr><td colspan="4">Chưa có thành viên trong trang này.</td></tr> }
+    </tbody></table></div>
+    <div class="pagination"><button class="secondary-button" type="button" [disabled]="read.blocked || write.busy() || data.page === 0" (click)="load(data.page - 1)">Trang trước</button><span>Trang {{ data.page + 1 }}</span><button class="secondary-button" type="button" [disabled]="read.blocked || write.busy() || (data.page + 1)*data.size >= data.total" (click)="load(data.page + 1)">Trang sau</button></div>
+    <p class="field-hint">Đổi quyền hoặc trạng thái sẽ thu hồi phiên đăng nhập dài hạn. Quyền ở các tab đang mở có thể còn hiệu lực đến khi phiên hiện tại hết hạn. Tổ chức phải giữ ít nhất một ADMIN đang hoạt động.</p>
+  }
+
+  <dialog #confirmation class="member-dialog" aria-labelledby="member-dialog-title" (cancel)="cancel($event)">
+    @if (selection(); as change) {
+      <form (ngSubmit)="confirm()">
+        <h2 id="member-dialog-title">{{ change.kind === 'role' ? 'Đổi quyền thành viên' : change.member.enabled ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản' }}</h2>
+        <p class="identifier">{{ change.member.displayName }} · {{ change.member.email }}</p>
+        @if (change.kind === 'role') { <label for="changed-role">Quyền mới</label><select id="changed-role" name="role" [(ngModel)]="selectedRole" [disabled]="write.busy()">@for (role of roles; track role) { <option [value]="role">{{ role }} — {{ labels[role] }}</option> }</select> }
+        <p class="field-hint">Phiên đăng nhập dài hạn của thành viên sẽ bị thu hồi. Tổ chức phải giữ ít nhất một ADMIN đang hoạt động.</p>
+        @if (change.member.id === auth.user()?.id) { <p class="notice">Bạn đang thay đổi tài khoản của mình. Sau khi thành công, bạn sẽ được yêu cầu đăng nhập lại.</p> }
+        @if (write.error()) { <p class="notice error" role="alert">{{ write.error() }}</p> }
+        @if (write.remaining()) { <p role="status">Thử lại sau {{ write.remaining() }} giây.</p> }
+        <div class="toolbar"><button type="submit" class="primary-button compact-button" [disabled]="blocked || (change.kind === 'role' && selectedRole === change.member.role)">{{ write.busy() ? 'Đang cập nhật…' : 'Xác nhận thay đổi' }}</button><button type="button" class="secondary-button" [disabled]="write.busy()" (click)="cancel()">Hủy thay đổi</button></div>
+      </form>
+    }
+  </dialog>
+</app-shell>
