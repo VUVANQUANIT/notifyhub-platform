@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM eclipse-temurin:25-jdk-jammy AS build
 
 ARG MODULE
 WORKDIR /workspace/backend
@@ -26,7 +26,7 @@ RUN sed -i 's/\r$//' mvnw \
     && ./mvnw --batch-mode --no-transfer-progress -pl "$MODULE" -am -DskipTests package \
     && cp "$MODULE"/target/"$MODULE"-*.jar /tmp/app.jar
 
-FROM eclipse-temurin:21-jre-jammy AS runtime
+FROM eclipse-temurin:25-jre-jammy AS runtime
 
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
