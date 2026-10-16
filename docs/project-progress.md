@@ -12,6 +12,8 @@ Hạng mục 3 trên `quanvv/operations-audit`: identity audit transactional out
 
 ## Phạm vi đánh giá
 
+PR #19/#20/#21 đã qua toàn bộ CI, gồm CodeQL và container Trivy. Hạng mục 4 trên `quanvv/k3d-deployment`: cluster riêng, 12 pod Ready, 45 resource valid, TLS cùng origin/CSP/Trusted Types, secret/DB roles riêng, initial ADMIN qua operator channel, backup AES-256-GCM và restore namespace riêng. Live Chromium qua invitation/activation/MFA recovery/audit và email campaign completion; không có CSP violation. Tempo đã nhận trace thật. Đã sửa service-link env collision và RabbitMQ cấu hình Worker ngoài local. Provider thật vẫn cần credentials; k3d là môi trường validation một node. Xem [deployment](deployment.md).
+
 Đánh giá dựa trên workflow và kiểm thử hiện có, không suy ra hoàn thành từ số file hoặc service bootstrap. PR #7/#8/#10/#11/#12/#13/#15/#16 đã merge vào `develop`; PR #17 đã tích hợp `develop` vào `main`. Nền hiện có: backend Campaign/Worker/Reporting, Auth/JWT/Redis/OTP, Monitoring và frontend campaign/reporting. Nhánh `quanvv/member-management` bổ sung UI quản lý thành viên ADMIN, cần review/merge để tích hợp phần mới.
 
 ## Hạng mục

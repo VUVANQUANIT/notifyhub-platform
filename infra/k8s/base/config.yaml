@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notifyhub-config
+data:
+  JWT_ISSUER_URI: https://notifyhub.localhost:8443
+  JWT_JWK_SET_URI: http://auth-service:8081/.well-known/jwks.json
+  JWT_AUDIENCE: notifyhub
+  AUTH_PUBLIC_URL: https://notifyhub.localhost:8443
+  AUTH_SERVICE_URI: http://auth-service:8081
+  CAMPAIGN_SERVICE_URI: http://campaign-service:8082
+  NOTIFICATION_SERVICE_URI: http://notification-service:8083
+  REPORTING_SERVICE_URI: http://reporting-service:8084
+  AUTH_REDIS_HOST: redis
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  RABBITMQ_HOST: rabbitmq
+  AUTH_SIGNING_KEY_PATH: /run/auth-keys/private.pem
+  AUTH_CONTROL_SECRET_PATH: /run/auth-keys/control.secret
+  AUTH_REGISTRATION_ENABLED: "false"
+  AUTH_SMTP_HOST: mailhog
+  AUTH_SMTP_PORT: "1025"
+  SMTP_HOST: mailhog
+  SMTP_PORT: "1025"
+  OTEL_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+  MONITORING_USERNAME: notifyhub-scrape
+  JAVA_TOOL_OPTIONS: -Xmx256m -XX:MaxDirectMemorySize=64m
