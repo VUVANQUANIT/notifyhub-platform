@@ -77,7 +77,7 @@ RabbitMQ is used for commands that should be processed by a worker:
 - `notification.send.sms`
 - `notification.retry`
 
-The delivery worker uses manual acknowledgement, bounded prefetch, retry queues and a dead-letter queue. A task is acknowledged only after the provider adapter returns a successful result.
+The delivery worker uses manual acknowledgement, bounded prefetch, durable scheduled retries and dead-letter queues. A task is acknowledged after the provider result or a retry/dead-letter handoff commits to PostgreSQL.
 
 ### Campaign delivery flow
 
@@ -147,12 +147,14 @@ notifyhub/
 
 ```powershell
 Copy-Item .env.example .env
+./scripts/setup-monitoring.ps1
 docker compose up -d
 ```
 
 RabbitMQ is enabled by default. Start the Kafka-compatible broker only when working on event streaming:
 
 ```powershell
+./scripts/setup-monitoring.ps1 -Kafka
 docker compose --profile kafka up -d
 ```
 
@@ -176,7 +178,8 @@ mvn -f backend/pom.xml clean verify
 | Redpanda Admin API | `http://localhost:19644` |
 | MailHog | `http://localhost:8025` |
 | Prometheus | `http://localhost:9090` |
-| Grafana | `http://localhost:3000` |
+| Grafana | `http://localhost:3000/d/notifyhub-overview` |
+| Alertmanager | `http://localhost:9093` |
 
 ## Delivery plan
 
@@ -190,51 +193,57 @@ mvn -f backend/pom.xml clean verify
 
 ### Stage 2 - Identity and tenant isolation
 
-- [ ] Tenant, user, role and permission model.
-- [ ] JWT access token and refresh-token rotation.
-- [ ] Tenant context propagation through the request boundary.
-- [ ] Database isolation tests.
-- [ ] Redis-backed OTP and rate limiting.
+- [x] Tenant, user, role and permission model.
+- [x] JWT access token and refresh-token rotation.
+- [x] Tenant context propagation through the request boundary.
+- [x] Database isolation tests.
+- [x] Redis-backed password-recovery OTP and Auth rate limiting.
 
 ### Stage 3 - Campaign API
 
-- [ ] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
-- [ ] Recipient import and validation.
-- [ ] Pagination, filtering and idempotent commands.
-- [ ] OpenAPI specification.
+- [x] Campaign state machine: `DRAFT`, `SCHEDULED`, `RUNNING`, `COMPLETED`, `FAILED`.
+- [x] Recipient CSV import and validation (bounded synchronous uploads).
+- [x] Pagination, status filtering and idempotent create/start commands.
+- [x] OpenAPI specification.
+- [x] PostgreSQL persistence, Flyway migrations and Campaign tenant isolation.
+- [x] Aggregate verified delivery results and finish campaigns after all recipients reach terminal state.
 
 ### Stage 4 - RabbitMQ delivery pipeline
 
-- [ ] Exchange and queue declarations.
-- [ ] Publisher confirms.
-- [ ] Manual acknowledgement and prefetch.
-- [ ] Retry with backoff.
-- [ ] Dead-letter exchange and dead-letter queue.
-- [ ] Idempotent delivery by `notificationId`.
+- [x] Durable exchange and email/SMS queue declarations.
+- [x] Publisher confirms and mandatory routing checks.
+- [x] Manual acknowledgement and bounded prefetch.
+- [x] Bounded provider retries with durable exponential backoff.
+- [x] Confirmed dead-letter exchange and email/SMS dead-letter queues.
+- [x] Delivery deduplication by `notificationId` after commit and across concurrent workers.
+- [x] Email delivery through SMTP/MailHog and simulated SMS, with PostgreSQL delivery state.
 
 ### Stage 5 - Kafka event pipeline
 
-- [ ] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
-- [ ] Topic and partition configuration.
-- [ ] Consumer groups for reporting and audit.
-- [ ] Offset management and replay procedure.
-- [ ] Consumer handling for duplicate and out-of-order events.
+- [x] Event envelope with `eventId`, `eventType`, `eventVersion`, `tenantId`, `occurredAt` and `correlationId`.
+- [x] Topic and partition configuration; CampaignStarted dispatcher consumer.
+- [x] Durable Notification delivery-result outbox and confirmed Kafka publisher.
+- [x] Independent consumer groups for Campaign results and Reporting projections.
+- [ ] Audit consumer group.
+- [x] Dispatcher offset management, dead-letter topic and replay procedure.
+- [x] Dispatcher handling for duplicate events and independence from earlier event arrival.
 
 ### Stage 6 - Consistency and operations
 
-- [ ] Transactional Outbox in Campaign Service.
-- [ ] Reporting read model.
-- [ ] Metrics for throughput, consumer lag, retry count and failure rate.
+- [x] Transactional Outbox records and Kafka publisher in Campaign Service.
+- [x] Durable batched dispatch jobs and confirmed RabbitMQ task publishing.
+- [x] Reporting read model with tenant-scoped, paginated REST queries and JWT authorization.
+- [x] Metrics for throughput, consumer lag, retry count and failure rate; Grafana dashboard and alert rules.
 - [ ] Distributed tracing across REST, Kafka and RabbitMQ.
-- [ ] Testcontainers integration suite.
-- [ ] Container image build and Trivy scan in CI.
+- [x] Campaign API/persistence/security Testcontainers integration suite.
+- [x] Container image build and Trivy scan configured in CI.
 - [ ] Kubernetes deployment with k3d.
 
 ## Design constraints
 
 - Default delivery guarantee is at-least-once; consumers must be idempotent.
 - Ordering is scoped to a Kafka partition, not the entire system.
-- A message is not acknowledged before its side effect is completed.
+- A successful delivery is acknowledged after provider acceptance and database commit; a failed task is acknowledged after its retry/dead-letter handoff is durably committed.
 - Business data and an outbox record must be committed in the same database transaction.
 - A broker is selected according to message semantics, not convenience.
 - Local infrastructure is split into profiles to keep laptop resource usage manageable.
@@ -247,7 +256,15 @@ mvn -f backend/pom.xml clean verify
 
 - [Campaign flow, state machine and domain model](docs/domain/campaign-domain.md)
 - [Testing strategy and TDD readiness](docs/testing-strategy.md)
+- [Auth: JWT/JWKS, tenants, users, roles and refresh lifecycle](docs/auth-service.md)
+- [Auth controls: Redis rate limiting, recovery OTP and email outbox](docs/auth-controls.md)
+- [Campaign Service: run locally, API and persistence](docs/campaign-service.md)
+- [Campaign messaging: brokers, contracts, retries and replay](docs/campaign-messaging.md)
+- [Delivery results, campaign completion and Reporting API](docs/delivery-results-reporting.md)
+- [Monitoring: metrics, dashboard, alerts and runbook](docs/monitoring.md)
+- [Project progress and remaining work](docs/project-progress.md)
+- [Notification Worker: providers, delivery state, acknowledgement, retry and DLQ](docs/notification-worker.md)
 
 ## Project status
 
-The repository currently contains the service skeleton, local infrastructure, build configuration and architecture documentation. Business workflows, producers, consumers and persistence models are implemented incrementally according to the delivery plan above.
+Campaign Service implements create, CSV import, listing, start/schedule and transactional outbox persistence. Its `messaging` profile publishes Kafka events, dispatches personalized RabbitMQ tasks and aggregates verified delivery results into COMPLETED/FAILED campaigns. Notification Service's `worker` profile sends email through SMTP/MailHog, simulates SMS and commits delivery state with durable retry/DLQ handoffs; its `events` profile publishes terminal results from a transactional outbox. Reporting's `messaging` profile maintains an idempotent PostgreSQL read model with tenant-scoped REST queries. Auth implements tenant registration, password login, member roles, RSA JWT/JWKS, refresh rotation/replay revocation, Redis rate limits and single-use email OTP password recovery with encrypted mail outbox and password-change notices. Gateway, Campaign and Reporting verify its JWT issuer, audience and scope; `authenticated-local` runs Campaign/Reporting with real JWT instead of development actor headers. Integration and JAR smoke tests cover real issuers, roles, tenant isolation, recovery/concurrency/rollback and infrastructure failure. The Angular frontend provides login/recovery, campaign create/CSV import/start/schedule and paginated delivery reporting through Gateway. Member management, login MFA, email verification, audit, tracing and Kubernetes operations remain pending. See the frontend runbook in frontend/README.md. Monitoring provides authenticated Prometheus scraping, business/backlog metrics, RabbitMQ queues, Kafka consumer lag, a provisioned Grafana dashboard and local Alertmanager alerts. See the [progress assessment](docs/project-progress.md) for scope and evidence.

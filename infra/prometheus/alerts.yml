@@ -1,0 +1,80 @@
+groups:
+  - name: notifyhub
+    rules:
+      - alert: NotifyHubServiceDown
+        expr: up{job="notifyhub-services"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ $labels.service }} cannot be scraped'
+          description: 'Check service process, monitoring profile, scrape credentials and host connectivity.'
+      - alert: NotifyHubDatabaseMetricsUnavailable
+        expr: up{job="notifyhub-services",service!="api-gateway"} == 1 unless on(service,instance) notifyhub_monitoring_database_up == 1
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ $labels.service }} database metrics are unavailable'
+          description: 'Database polling failed, is stale, or has not initialized. Do not interpret missing backlog as zero.'
+      - alert: NotifyHubPipelineStalled
+        expr: notifyhub_pipeline_oldest_seconds > 300
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: '{{ $labels.service }} {{ $labels.queue }} processing is stalled'
+          description: 'Oldest pending row has waited more than five minutes. Check publishers, dependencies and last_error in the owning table.'
+      - alert: NotifyHubCampaignStuck
+        expr: notifyhub_campaign_running_oldest_seconds > 1800
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Campaign has remained RUNNING for over 30 minutes'
+          description: 'Inspect pending dispatch/tasks/results, quarantine topics and provider failures. Tune this threshold for campaign size.'
+      - alert: NotifyHubDeliveryFailureRate
+        expr: (sum by(service) (increase(notifyhub_delivery_completed_total{status="FAILED"}[5m])) / clamp_min(sum by(service) (increase(notifyhub_delivery_completed_total[5m])), 1) > 0.1) and (sum by(service) (increase(notifyhub_delivery_completed_total[5m])) >= 10)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: 'More than 10% of deliveries are failing'
+          description: 'At least ten terminal deliveries occurred in five minutes. Inspect provider availability and failed delivery records.'
+      - alert: NotifyHubRecoveryMailFailed
+        expr: notifyhub_auth_recovery_mail_failed > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Recovery mail has retained failures'
+          description: 'Inspect recovery_mail_outbox failure_code and SMTP. This remains active until failures are handled or retained rows are cleaned.'
+      - alert: NotifyHubBrokerMetricsDown
+        expr: up{job=~"rabbitmq|kafka"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ $labels.service }} metrics cannot be scraped'
+          description: 'Check broker/exporter health and network. Kafka target is enabled only with setup-monitoring.ps1 -Kafka.'
+      - alert: NotifyHubDeadLetters
+        expr: rabbitmq_queue_messages_ready{queue=~"notifyhub\\..*\\.dlq"} > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: 'Dead letters in {{ $labels.queue }}'
+          description: 'Investigate failure cause before redrive; repeated delivery can duplicate provider side effects.'
+      - alert: NotifyHubQueueWithoutConsumers
+        expr: (rabbitmq_queue_messages_ready{queue=~"notifyhub\\.notification\\.(email|sms)"} > 0) and on(instance,queue,vhost) (rabbitmq_queue_consumers == 0)
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: '{{ $labels.queue }} has messages but no consumers'
+          description: 'Check Notification Service worker profile and RabbitMQ listener health.'
+      - alert: NotifyHubKafkaConsumerLag
+        expr: sum by(consumergroup,topic) (clamp_min(kafka_consumergroup_lag, 0)) > 100
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: '{{ $labels.consumergroup }} lags on {{ $labels.topic }}'
+          description: 'Consumer group is over 100 records behind for five minutes. Inspect consumer failures, DLT and DB latency.'
+      - alert: NotifyHubHttpServerErrors
+        expr: (sum by(service) (rate(http_server_requests_seconds_count{status=~"5..",uri!~"/actuator.*"}[5m])) / clamp_min(sum by(service) (rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])), 0.001) > 0.05) and (sum by(service) (increase(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])) >= 20)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: '{{ $labels.service }} HTTP error rate is above 5%'
+          description: 'At least twenty requests in five minutes. Inspect logs, dependencies and the dashboard latency panel.'
