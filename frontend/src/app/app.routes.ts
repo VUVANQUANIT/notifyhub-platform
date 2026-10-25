@@ -2,6 +2,8 @@ import { Routes } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
+  { path: 'activate', loadComponent: () => import('./auth/activate').then(m => m.Activate) },
+  { path: 'invitations', canActivate: [authGuard], loadComponent: () => import('./members/invitations').then(m => m.Invitations) },
   { path: 'login', loadComponent: () => import('./auth/login').then(m => m.Login) },
   { path: 'forgot-password', loadComponent: () => import('./auth/recovery').then(m => m.Recovery) },
   { path: 'workspace', canActivate: [authGuard], loadComponent: () => import('./workspace/workspace').then(m => m.Workspace) },

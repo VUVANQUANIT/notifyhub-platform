@@ -1,5 +1,6 @@
 import { Component, DestroyRef, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { RouterLink } from '@angular/router';
 import { AbstractControl, FormsModule, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, switchMap, throwError } from 'rxjs';
@@ -17,7 +18,7 @@ function matchingPasswords(control: AbstractControl) {
 }
 type Change = { member: User; kind: 'role' | 'enabled' };
 
-@Component({ imports: [Shell, FormsModule, ReactiveFormsModule], templateUrl: './members.html' })
+@Component({ imports: [Shell, FormsModule, ReactiveFormsModule, RouterLink], templateUrl: './members.html' })
 export class Members {
   readonly auth = inject(AuthService);
   private readonly api = inject(MemberApi);
