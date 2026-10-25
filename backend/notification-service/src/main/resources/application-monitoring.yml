@@ -1,0 +1,19 @@
+# Opt in to authenticated Prometheus scraping; credentials have no defaults.
+spring:
+  config:
+    import: optional:configtree:${MONITORING_CONFIG_DIR:.env.monitoring/}
+monitoring:
+  username: ${MONITORING_USERNAME}
+  password: ${MONITORING_PASSWORD}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      service: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        notifyhub.delivery.provider.duration: true
