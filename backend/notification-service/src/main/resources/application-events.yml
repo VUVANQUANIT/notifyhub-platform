@@ -1,0 +1,22 @@
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 10000
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+    admin:
+      fail-fast: true
+notification:
+  events:
+    enabled: true
+    polling-enabled: true
+    topic: notifyhub.notification.events.v1
+    partitions: 3
+    replicas: 1
+    poll-delay-ms: 1000

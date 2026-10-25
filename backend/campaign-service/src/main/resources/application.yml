@@ -3,8 +3,39 @@ server:
 spring:
   application:
     name: campaign-service
+  datasource:
+    url: ${CAMPAIGN_DB_URL}
+    username: ${CAMPAIGN_DB_USERNAME}
+    password: ${CAMPAIGN_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    default-schema: campaign
+    schemas: campaign
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    rabbit:
+      enabled: false
+campaign:
+  scheduling:
+    enabled: true
+    delay-ms: 5000

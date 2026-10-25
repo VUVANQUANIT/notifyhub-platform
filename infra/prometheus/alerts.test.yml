@@ -1,0 +1,650 @@
+{
+  "rule_files": [
+    "alerts.yml"
+  ],
+  "evaluation_interval": "1m",
+  "tests": [
+    {
+      "name": "NotifyHubServiceDown",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "up{service=\"campaign-service\",instance=\"app:8082\",job=\"notifyhub-services\"}",
+          "values": "0+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "1m",
+          "alertname": "NotifyHubServiceDown",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "2m",
+          "alertname": "NotifyHubServiceDown",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "campaign-service",
+                "instance": "app:8082",
+                "job": "notifyhub-services",
+                "severity": "critical"
+              },
+              "exp_annotations": {
+                "summary": "campaign-service cannot be scraped",
+                "description": "Check service process, monitoring profile, scrape credentials and host connectivity."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubDatabaseMetricsUnavailable",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "up{service=\"campaign-service\",instance=\"app:8082\",job=\"notifyhub-services\"}",
+          "values": "1+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "1m",
+          "alertname": "NotifyHubDatabaseMetricsUnavailable",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "2m",
+          "alertname": "NotifyHubDatabaseMetricsUnavailable",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "campaign-service",
+                "instance": "app:8082",
+                "job": "notifyhub-services",
+                "severity": "critical"
+              },
+              "exp_annotations": {
+                "summary": "campaign-service database metrics are unavailable",
+                "description": "Database polling failed, is stale, or has not initialized. Do not interpret missing backlog as zero."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubPipelineStalled",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "notifyhub_pipeline_oldest_seconds{service=\"campaign-service\",queue=\"outbox\",instance=\"app:8082\"}",
+          "values": "301+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "4m",
+          "alertname": "NotifyHubPipelineStalled",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "5m",
+          "alertname": "NotifyHubPipelineStalled",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "campaign-service",
+                "queue": "outbox",
+                "instance": "app:8082",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "campaign-service outbox processing is stalled",
+                "description": "Oldest pending row has waited more than five minutes. Check publishers, dependencies and last_error in the owning table."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubCampaignStuck",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "notifyhub_campaign_running_oldest_seconds{service=\"campaign-service\",instance=\"app:8082\"}",
+          "values": "1801+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "9m",
+          "alertname": "NotifyHubCampaignStuck",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "10m",
+          "alertname": "NotifyHubCampaignStuck",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "campaign-service",
+                "instance": "app:8082",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "Campaign has remained RUNNING for over 30 minutes",
+                "description": "Inspect pending dispatch/tasks/results, quarantine topics and provider failures. Tune this threshold for campaign size."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubRecoveryMailFailed",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "notifyhub_auth_recovery_mail_failed{service=\"auth-service\",instance=\"app:8081\"}",
+          "values": "1+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "4m",
+          "alertname": "NotifyHubRecoveryMailFailed",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "5m",
+          "alertname": "NotifyHubRecoveryMailFailed",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "auth-service",
+                "instance": "app:8081",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "Recovery mail has retained failures",
+                "description": "Inspect recovery_mail_outbox failure_code and SMTP. This remains active until failures are handled or retained rows are cleaned."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubBrokerMetricsDown",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "up{service=\"kafka-exporter\",job=\"kafka\",instance=\"kafka-exporter:9308\"}",
+          "values": "0+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "1m",
+          "alertname": "NotifyHubBrokerMetricsDown",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "2m",
+          "alertname": "NotifyHubBrokerMetricsDown",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "kafka-exporter",
+                "job": "kafka",
+                "instance": "kafka-exporter:9308",
+                "severity": "critical"
+              },
+              "exp_annotations": {
+                "summary": "kafka-exporter metrics cannot be scraped",
+                "description": "Check broker/exporter health and network. Kafka target is enabled only with setup-monitoring.ps1 -Kafka."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubDeadLetters",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "rabbitmq_queue_messages_ready{service=\"rabbitmq\",instance=\"rabbitmq:15692\",queue=\"notifyhub.notification.email.dlq\",vhost=\"/\"}",
+          "values": "1+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "1m",
+          "alertname": "NotifyHubDeadLetters",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "2m",
+          "alertname": "NotifyHubDeadLetters",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "rabbitmq",
+                "instance": "rabbitmq:15692",
+                "queue": "notifyhub.notification.email.dlq",
+                "vhost": "/",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "Dead letters in notifyhub.notification.email.dlq",
+                "description": "Investigate failure cause before redrive; repeated delivery can duplicate provider side effects."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubQueueWithoutConsumers",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "rabbitmq_queue_messages_ready{service=\"rabbitmq\",instance=\"rabbitmq:15692\",queue=\"notifyhub.notification.email\",vhost=\"/\"}",
+          "values": "2+0x20"
+        },
+        {
+          "series": "rabbitmq_queue_consumers{service=\"rabbitmq\",instance=\"rabbitmq:15692\",queue=\"notifyhub.notification.email\",vhost=\"/\"}",
+          "values": "0+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "1m",
+          "alertname": "NotifyHubQueueWithoutConsumers",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "2m",
+          "alertname": "NotifyHubQueueWithoutConsumers",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "rabbitmq",
+                "instance": "rabbitmq:15692",
+                "queue": "notifyhub.notification.email",
+                "vhost": "/",
+                "severity": "critical"
+              },
+              "exp_annotations": {
+                "summary": "notifyhub.notification.email has messages but no consumers",
+                "description": "Check Notification Service worker profile and RabbitMQ listener health."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubKafkaConsumerLag",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "kafka_consumergroup_lag{consumergroup=\"campaign-results-v1\",topic=\"notifyhub.notification.events.v1\",partition=\"0\"}",
+          "values": "60+0x20"
+        },
+        {
+          "series": "kafka_consumergroup_lag{consumergroup=\"campaign-results-v1\",topic=\"notifyhub.notification.events.v1\",partition=\"1\"}",
+          "values": "41+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "4m",
+          "alertname": "NotifyHubKafkaConsumerLag",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "5m",
+          "alertname": "NotifyHubKafkaConsumerLag",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "consumergroup": "campaign-results-v1",
+                "topic": "notifyhub.notification.events.v1",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "campaign-results-v1 lags on notifyhub.notification.events.v1",
+                "description": "Consumer group is over 100 records behind for five minutes. Inspect consumer failures, DLT and DB latency."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubDeliveryFailureRate",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",channel=\"EMAIL\",status=\"FAILED\"}",
+          "values": "0+2x20"
+        },
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",channel=\"EMAIL\",status=\"SENT\"}",
+          "values": "0+8x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "10m",
+          "alertname": "NotifyHubDeliveryFailureRate",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "notification-service",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "More than 10% of deliveries are failing",
+                "description": "At least ten terminal deliveries occurred in five minutes. Inspect provider availability and failed delivery records."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotifyHubHttpServerErrors",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "http_server_requests_seconds_count{service=\"api-gateway\",uri=\"/api/campaigns\",status=\"500\"}",
+          "values": "0+2x20"
+        },
+        {
+          "series": "http_server_requests_seconds_count{service=\"api-gateway\",uri=\"/api/campaigns\",status=\"200\"}",
+          "values": "0+18x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "10m",
+          "alertname": "NotifyHubHttpServerErrors",
+          "exp_alerts": [
+            {
+              "exp_labels": {
+                "service": "api-gateway",
+                "severity": "warning"
+              },
+              "exp_annotations": {
+                "summary": "api-gateway HTTP error rate is above 5%",
+                "description": "At least twenty requests in five minutes. Inspect logs, dependencies and the dashboard latency panel."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Healthy systems and optional Kafka produce no alerts",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "up{service=\"campaign-service\",instance=\"app:8082\",job=\"notifyhub-services\"}",
+          "values": "1+0x20"
+        },
+        {
+          "series": "notifyhub_monitoring_database_up{service=\"campaign-service\",instance=\"app:8082\",job=\"notifyhub-services\"}",
+          "values": "1+0x20"
+        },
+        {
+          "series": "notifyhub_pipeline_oldest_seconds{service=\"campaign-service\",queue=\"outbox\"}",
+          "values": "0+0x20"
+        },
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",status=\"FAILED\"}",
+          "values": "0+0x20"
+        },
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",status=\"SENT\"}",
+          "values": "0+0x20"
+        },
+        {
+          "series": "rabbitmq_queue_messages_ready{queue=\"notifyhub.notification.email.dlq\"}",
+          "values": "0+0x20"
+        },
+        {
+          "series": "kafka_consumergroup_lag{consumergroup=\"campaign-results-v1\",topic=\"notifyhub.notification.events.v1\"}",
+          "values": "-1+0x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubServiceDown",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubDatabaseMetricsUnavailable",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubPipelineStalled",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubCampaignStuck",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubDeliveryFailureRate",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubRecoveryMailFailed",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubBrokerMetricsDown",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubDeadLetters",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubQueueWithoutConsumers",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubKafkaConsumerLag",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubHttpServerErrors",
+          "exp_alerts": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard PromQL parses with no input data",
+      "promql_expr_test": [
+        {
+          "expr": "up{job=\"notifyhub-services\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_monitoring_database_up",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(channel,status) (rate(notifyhub_delivery_completed_total[5m]))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum(rate(notifyhub_delivery_completed_total{status=\"FAILED\"}[5m])) / clamp_min(sum(rate(notifyhub_delivery_completed_total[5m])),0.001)",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(channel,outcome) (rate(notifyhub_delivery_attempts_total[5m]))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(channel) (rate(notifyhub_delivery_retries_total[5m]))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "histogram_quantile(0.95,sum by(le,channel) (rate(notifyhub_delivery_provider_duration_seconds_bucket[5m])))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(channel,status) (notifyhub_delivery_state)",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_pipeline_pending",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_pipeline_oldest_seconds",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_campaign_running",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_campaign_running_oldest_seconds",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "rabbitmq_queue_messages_ready{queue=~\"notifyhub\\\\..*\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "rabbitmq_queue_messages_unacked{queue=~\"notifyhub\\\\..*\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "rabbitmq_queue_consumers{queue=~\"notifyhub\\\\..*\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "rabbitmq_queue_messages_ready{queue=~\"notifyhub\\\\..*\\\\.dlq\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(consumergroup,topic) (clamp_min(kafka_consumergroup_lag,0))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "up{job=\"kafka\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(service) (rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[5m]))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "histogram_quantile(0.95,sum by(le,service) (rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[5m])))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(service) (rate(http_server_requests_seconds_count{status=~\"5..\",uri!~\"/actuator.*\"}[5m]))",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "sum by(service) (jvm_memory_used_bytes{area=\"heap\"})",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_reporting_pending",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_reporting_unknown_expected",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "notifyhub_auth_recovery_mail_failed",
+          "eval_time": "0m",
+          "exp_samples": []
+        },
+        {
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "eval_time": "0m",
+          "exp_samples": []
+        }
+      ]
+    },
+    {
+      "name": "Low traffic does not trigger failure ratios",
+      "interval": "1m",
+      "input_series": [
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",status=\"FAILED\"}",
+          "values": "0+1x20"
+        },
+        {
+          "series": "notifyhub_delivery_completed_total{service=\"notification-service\",status=\"SENT\"}",
+          "values": "0+0x20"
+        },
+        {
+          "series": "http_server_requests_seconds_count{service=\"api-gateway\",uri=\"/api/campaigns\",status=\"500\"}",
+          "values": "0+1x20"
+        }
+      ],
+      "alert_rule_test": [
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubDeliveryFailureRate",
+          "exp_alerts": []
+        },
+        {
+          "eval_time": "15m",
+          "alertname": "NotifyHubHttpServerErrors",
+          "exp_alerts": []
+        }
+      ]
+    }
+  ]
+}

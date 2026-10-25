@@ -1,0 +1,15 @@
+# Workstation database defaults with real JWT authorization. Do not combine with local.
+server:
+  address: 127.0.0.1
+spring:
+  datasource:
+    url: ${CAMPAIGN_DB_URL:jdbc:postgresql://localhost:5432/notifyhub}
+    username: ${CAMPAIGN_DB_USERNAME:notifyhub}
+    password: ${CAMPAIGN_DB_PASSWORD:notifyhub_local_password}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://127.0.0.1:8081}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://127.0.0.1:8081/.well-known/jwks.json}
+          audiences: ${JWT_AUDIENCE:notifyhub}

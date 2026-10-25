@@ -1,0 +1,9 @@
+server:
+  address: 127.0.0.1
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://127.0.0.1:8081}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://127.0.0.1:8081/.well-known/jwks.json}
