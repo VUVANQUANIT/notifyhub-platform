@@ -1,0 +1,36 @@
+<main class="recovery-layout">
+  <header class="recovery-header"><a class="brand" routerLink="/login"><span class="brand-mark" aria-hidden="true">n<span></span></span>notifyhub<span class="brand-dot">.</span></a><a class="back-link" routerLink="/login">← Quay lại đăng nhập</a></header>
+  <section class="recovery-card">
+    <div class="recovery-symbol" aria-hidden="true">↺</div>
+    <span class="section-number">BẢO MẬT TÀI KHOẢN</span>
+    <h1>Lấy lại quyền truy cập<span class="accent">.</span></h1>
+    <p class="form-intro">Một vài bước để trở lại không gian làm việc của bạn.</p>
+    <ol class="recovery-steps" aria-label="Tiến trình khôi phục"><li [class.current]="step() === 'request'" [class.done]="requested()"><span>01</span> Yêu cầu mã</li><li [class.current]="step() === 'reset'"><span>02</span> Đặt mật khẩu mới</li></ol>
+    @if (step() === 'request') {
+      <form [formGroup]="requestForm" (ngSubmit)="request()" novalidate>
+        <fieldset [disabled]="requestState.busy()">
+          <div class="field"><label for="recovery-tenant">Mã tổ chức</label><input id="recovery-tenant" formControlName="tenantSlug" autocomplete="organization" placeholder="vd: acme-team" maxlength="63" [attr.aria-invalid]="requestInvalid('tenantSlug')" aria-describedby="recovery-tenant-error">@if (requestInvalid('tenantSlug')) { <span id="recovery-tenant-error" class="field-error">Nhập mã tổ chức hợp lệ, từ 3–63 ký tự.</span> }</div>
+          <div class="field"><label for="recovery-email">Email</label><input id="recovery-email" formControlName="email" type="email" autocomplete="username" placeholder="ban@congty.com" maxlength="254" [attr.aria-invalid]="requestInvalid('email')" aria-describedby="recovery-email-error">@if (requestInvalid('email')) { <span id="recovery-email-error" class="field-error">Nhập địa chỉ email hợp lệ.</span> }</div>
+          @if (requestState.error()) { <div class="notice error" role="alert">{{ requestState.error() }}</div> }
+          <button class="primary-button" type="submit" [disabled]="requestState.blocked">{{ requestState.busy() ? 'Đang gửi yêu cầu…' : requestState.remaining() ? 'Gửi lại sau ' + requestState.remaining() + ' giây' : 'Gửi mã khôi phục' }}<span aria-hidden="true">↗</span></button>
+        </fieldset>
+      </form>
+      <button class="text-button existing-code" type="button" (click)="step.set('reset')">Tôi đã có mã khôi phục</button>
+    } @else {
+      @if (requested()) { <div class="notice success" role="status">Nếu tài khoản đủ điều kiện, bạn sẽ nhận được email chứa mã khôi phục. Vui lòng kiểm tra cả thư mục spam.</div> }
+      <form [formGroup]="resetForm" (ngSubmit)="reset()" novalidate>
+        <fieldset [disabled]="resetState.busy()">
+          <div class="field"><label for="challenge">Mã yêu cầu</label><input id="challenge" formControlName="challengeId" autocomplete="off" placeholder="Mã yêu cầu trong email khôi phục" [attr.aria-invalid]="resetInvalid('challengeId')" aria-describedby="challenge-hint"><span id="challenge-hint" class="field-hint" [class.field-error]="resetInvalid('challengeId')">{{ resetInvalid('challengeId') ? 'Nhập mã yêu cầu hợp lệ từ email.' : 'Được điền sẵn sau khi gửi yêu cầu. Có thể dùng mã trong email.' }}</span></div>
+          <div class="field"><label for="code">Mã xác nhận</label><input id="code" class="code-input" formControlName="code" inputmode="numeric" autocomplete="one-time-code" placeholder="00000000" maxlength="8" [attr.aria-invalid]="resetInvalid('code')" aria-describedby="code-hint"><span id="code-hint" class="field-hint" [class.field-error]="resetInvalid('code')">{{ resetInvalid('code') ? 'Nhập đủ 8 chữ số.' : 'Mã có 8 chữ số và có hiệu lực tối đa 5 phút.' }}</span></div>
+          <div class="field"><label for="new-password">Mật khẩu mới</label><input id="new-password" formControlName="password" type="password" autocomplete="new-password" maxlength="128" [attr.aria-invalid]="resetInvalid('password')" aria-describedby="new-password-hint"><span id="new-password-hint" class="field-hint" [class.field-error]="resetInvalid('password')">Dùng cụm mật khẩu dài từ 15 đến 128 ký tự.</span></div>
+          <div class="field"><label for="confirm-password">Nhập lại mật khẩu mới</label><input id="confirm-password" formControlName="confirm" type="password" autocomplete="new-password" maxlength="128" [attr.aria-invalid]="resetForm.controls.confirm.touched && resetForm.hasError('mismatch')" aria-describedby="confirm-error">@if (resetForm.controls.confirm.touched && (resetForm.hasError('mismatch') || resetInvalid('confirm'))) { <span id="confirm-error" class="field-error">Hai mật khẩu phải giống nhau.</span> }</div>
+          @if (resetState.error()) { <div class="notice error" role="alert">{{ resetState.error() }}</div> }
+          <button class="primary-button" type="submit" [disabled]="resetState.blocked">{{ resetState.busy() ? 'Đang cập nhật…' : resetState.remaining() ? 'Thử lại sau ' + resetState.remaining() + ' giây' : 'Cập nhật mật khẩu' }}<span aria-hidden="true">↗</span></button>
+        </fieldset>
+      </form>
+      <button class="text-button existing-code" type="button" [disabled]="resetState.busy()" (click)="step.set('request')">← Yêu cầu mã mới</button>
+    }
+    <p class="recovery-footer">Sau khi cập nhật, đăng nhập lại bằng mật khẩu mới.</p>
+  </section>
+  <footer class="recovery-bottom">© 2026 NotifyHub · Luôn giữ kết nối</footer>
+</main>

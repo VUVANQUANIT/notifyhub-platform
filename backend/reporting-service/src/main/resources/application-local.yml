@@ -1,0 +1,7 @@
+server:
+  address: 127.0.0.1
+spring:
+  datasource:
+    url: ${REPORTING_DB_URL:jdbc:postgresql://localhost:5432/notifyhub}
+    username: ${REPORTING_DB_USERNAME:notifyhub}
+    password: ${REPORTING_DB_PASSWORD:notifyhub_local_password}

@@ -24,7 +24,7 @@ SemVer tag (vX.Y.Z)
 
 ### CI
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, manual dispatch and as a reusable workflow.
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main` and `develop`, manual dispatch and as a reusable workflow. Campaign integration tests require Docker and run PostgreSQL Testcontainers during `verify`.
 
 - Builds and tests all Maven modules with Java 21 and Maven Wrapper 3.9.16.
 - Uploads Surefire/Failsafe reports even when verification fails.
@@ -32,6 +32,7 @@ SemVer tag (vX.Y.Z)
 - Builds every service image through the shared `backend/Dockerfile`.
 - Rejects images with fixed HIGH or CRITICAL vulnerabilities.
 - Reviews newly introduced dependencies and rejects AGPL/GPL dependencies.
+- `Frontend verify` uses the Node version pinned in `frontend/.nvmrc` to install the lockfile, build Angular, run session unit tests and test browser flows with Chromium. The browser suite uses synthetic API responses; `scripts/smoke-auth-browser.ps1` separately exercises real Gateway/Auth and PostgreSQL/Redis/MailHog locally.
 
 ### CodeQL
 
@@ -92,3 +93,5 @@ Infrastructure manifests and the deployment adapter should live in a separate co
 ## Dependency maintenance
 
 Dependabot checks Maven dependencies, GitHub Actions and the Docker base image weekly. Keep these updates small and let the same CI/security gates verify them.
+
+The backend parent manages `at.yawk.lz4:lz4-java` at `1.11.4`, overriding Kafka's transitive `1.10.1`. The container gate detected CVE-2026-106451 in Campaign, Notification and Reporting; the [maintainer advisory](https://github.com/yawkat/lz4-java/security/advisories/GHSA-mcr4-qmvw-px4g) identifies `1.11.4` as patched. Keep the override until the managed Kafka dependency includes a patched release.
