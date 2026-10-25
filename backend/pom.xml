@@ -21,7 +21,7 @@
         <tomcat.version>11.0.25</tomcat.version>
         <!-- Patched Jackson 3 baseline required by the HIGH/CRITICAL container scan. -->
         <jackson-bom.version>3.1.7</jackson-bom.version>
-        <lz4-java.version>1.11.4</lz4-java.version>
+        <lz4-java.version>1.12.1</lz4-java.version>
     </properties>
     <modules>
         <module>event-contracts</module>
