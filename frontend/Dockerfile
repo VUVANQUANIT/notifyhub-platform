@@ -7,6 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM nginx:stable-alpine
+RUN apk upgrade --no-cache
 COPY frontend/nginx.conf /etc/nginx/nginx.conf
 COPY frontend/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /workspace/dist/notifyhub-web/browser /usr/share/nginx/html
