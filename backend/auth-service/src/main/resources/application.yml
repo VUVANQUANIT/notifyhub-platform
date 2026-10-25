@@ -37,6 +37,7 @@ spring:
 auth:
   issuer: ${JWT_ISSUER_URI}
   signing-key-path: ${AUTH_SIGNING_KEY_PATH}
+  previous-public-jwks-path: ${AUTH_PREVIOUS_PUBLIC_JWKS_PATH:}
   registration-enabled: ${AUTH_REGISTRATION_ENABLED:false}
   audience: ${JWT_AUDIENCE:notifyhub}
   access-ttl: 5m

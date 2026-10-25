@@ -46,7 +46,10 @@ public class AuthConfiguration {
                 || properties.refreshTtl().isNegative() || properties.refreshTtl().isZero()) {
             throw new IllegalArgumentException("Invalid token lifetime or audience");
         }
-        return new SigningKeys(Path.of(properties.signingKeyPath()), local);
+        var keys = new SigningKeys(Path.of(properties.signingKeyPath()), local);
+        String previous=environment.getProperty("auth.previous-public-jwks-path","");
+        if(!previous.isBlank())keys.includePreviousPublicKeys(Path.of(previous));
+        return keys;
     }
 
     @Bean PasswordEncoder passwordEncoder() {
@@ -60,7 +63,10 @@ public class AuthConfiguration {
     }
 
     @Bean JwtDecoder jwtDecoder(SigningKeys keys, AuthProperties properties) throws Exception {
-        var decoder = NimbusJwtDecoder.withPublicKey(keys.publicKey()).build();
+        var processor = new com.nimbusds.jwt.proc.DefaultJWTProcessor<com.nimbusds.jose.proc.SecurityContext>();
+        processor.setJWSKeySelector(new com.nimbusds.jose.proc.JWSVerificationKeySelector<>(com.nimbusds.jose.JWSAlgorithm.RS256,
+                new ImmutableJWKSet<>(keys.verificationJwks())));
+        var decoder = new NimbusJwtDecoder(processor);
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(JwtValidators.createDefaultWithIssuer(properties.issuer()),
                 jwt -> jwt.getAudience().contains(properties.audience()) ? OAuth2TokenValidatorResult.success()
                         : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Invalid audience", null))));

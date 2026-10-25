@@ -33,7 +33,7 @@ public class AuthController {
     @PostMapping(value = "/api/auth/login", consumes = MediaType.APPLICATION_JSON_VALUE)
     Tokens login(@Valid @RequestBody Login request) {
         controls.rate("login-account", com.vuvanquan.notifyhub.auth.control.PasswordRecovery.account(request.tenantSlug(), request.email()), config.login());
-        return identities.login(request.tenantSlug(), request.email(), request.password());
+        return identities.login(request.tenantSlug(), request.email(), request.password(), request.code());
     }
     @PostMapping(value = "/api/auth/refresh", consumes = MediaType.APPLICATION_JSON_VALUE)
     Tokens refresh(@Valid @RequestBody Refresh request) {
@@ -70,7 +70,7 @@ public class AuthController {
 
     public record Register(@NotBlank @Size(max=63) String tenantSlug, @NotBlank @Size(max=100) String tenantName,
             @NotBlank @Size(max=254) String email, @NotBlank @Size(max=100) String displayName, @NotNull @Size(max=128) String password) {}
-    public record Login(@NotNull @Size(max=63) String tenantSlug, @NotNull @Size(max=254) String email, @NotNull @Size(max=128) String password) {}
+    public record Login(@NotNull @Size(max=63) String tenantSlug, @NotNull @Size(max=254) String email, @NotNull @Size(max=128) String password, @Size(max=43) String code) {}
     public record Refresh(@NotNull @Size(max=128) String refreshToken) {}
     public record CreateUser(@NotBlank @Size(max=254) String email, @NotBlank @Size(max=100) String displayName,
             @NotNull @Size(max=128) String password, @NotNull Role role) {}

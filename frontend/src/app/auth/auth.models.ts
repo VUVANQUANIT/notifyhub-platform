@@ -5,7 +5,7 @@ export interface Tokens {
   refreshToken: string;
   refreshExpiresAt: string;
 }
-export interface Credentials { tenantSlug: string; email: string; password: string }
+export interface Credentials { tenantSlug: string; email: string; password: string; code?: string }
 export interface User {
   id: string;
   tenantId: string;

@@ -18,7 +18,7 @@
         <article class="account-card"><div class="card-heading"><span class="card-symbol" aria-hidden="true">◎</span><span class="eyebrow">TÀI KHOẢN</span><span class="tag">{{ roleNames[auth.user()?.role || 'VIEWER'] }}</span></div><h3>{{ auth.user()?.displayName }}</h3><p class="account-email">{{ auth.user()?.email }}</p><dl><div><dt>Quyền truy cập</dt><dd>{{ roleNames[auth.user()?.role || 'VIEWER'] }}</dd></div><div><dt>Trạng thái</dt><dd><span class="inline-status"><span></span>Đang hoạt động</span></dd></div></dl></article>
         <article class="account-card tenant-card"><div class="card-heading"><span class="card-symbol" aria-hidden="true">▦</span><span class="eyebrow">TỔ CHỨC</span></div><h3>{{ auth.tenant()?.name }}</h3><p class="account-email">Không gian dành cho nhóm của bạn.</p><dl><div><dt>Mã tổ chức</dt><dd>{{ auth.tenant()?.slug }}</dd></div><div><dt>Thành viên</dt><dd>{{ auth.user()?.email }}</dd></div></dl></article>
       </div>
-      <article class="security-card"><span class="security-symbol" aria-hidden="true">◈</span><div><h3>Giữ tài khoản trong tầm kiểm soát.</h3><p>Sử dụng mật khẩu riêng và đăng xuất khi bạn kết thúc trên thiết bị dùng chung.</p></div><a routerLink="/forgot-password">Khôi phục mật khẩu <span aria-hidden="true">↗</span></a></article>
+      <article class="security-card"><span class="security-symbol" aria-hidden="true">◈</span><div><h3>Giữ tài khoản trong tầm kiểm soát.</h3><p>Bật xác thực hai bước, sử dụng mật khẩu riêng và đăng xuất trên thiết bị dùng chung.</p></div><a routerLink="/security">Bảo mật tài khoản <span aria-hidden="true">↗</span></a></article>
     </div>
     <footer class="workspace-footer"><span>© 2026 NotifyHub</span><span>Luôn giữ kết nối.</span></footer>
   </section>
