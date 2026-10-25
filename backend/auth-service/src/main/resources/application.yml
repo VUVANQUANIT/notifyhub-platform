@@ -31,12 +31,14 @@ spring:
       mail.smtp.auth: ${AUTH_SMTP_AUTH:false}
       mail.smtp.starttls.enable: ${AUTH_SMTP_STARTTLS:false}
       mail.smtp.starttls.required: ${AUTH_SMTP_STARTTLS:false}
+      mail.smtp.ssl.checkserveridentity: true
       mail.smtp.connectiontimeout: 2000
       mail.smtp.timeout: 2000
       mail.smtp.writetimeout: 2000
 auth:
   issuer: ${JWT_ISSUER_URI}
   signing-key-path: ${AUTH_SIGNING_KEY_PATH}
+  previous-public-jwks-path: ${AUTH_PREVIOUS_PUBLIC_JWKS_PATH:}
   registration-enabled: ${AUTH_REGISTRATION_ENABLED:false}
   audience: ${JWT_AUDIENCE:notifyhub}
   access-ttl: 5m
@@ -61,6 +63,10 @@ auth:
     mail-poll-enabled: true
     mail-poll-delay: 1000
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:

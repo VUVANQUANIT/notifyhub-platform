@@ -28,12 +28,16 @@ public class IdentityService {
     private final AuthProperties config;
     private final Clock clock;
     private final String dummyHash;
+    private final MfaService mfa;
+    private final IdentityAudit audit;
 
     public IdentityService(JdbcTemplate db, org.springframework.transaction.PlatformTransactionManager manager,
-            PasswordEncoder passwords, TokenIssuer issuer, AuthProperties config, Clock clock) {
+            PasswordEncoder passwords, TokenIssuer issuer, AuthProperties config, Clock clock, MfaService mfa, IdentityAudit audit) {
         this.db = db; this.tx = new TransactionTemplate(manager); this.passwords = passwords;
         this.issuer = issuer; this.config = config; this.clock = clock;
         this.dummyHash = passwords.encode(UUID.randomUUID().toString());
+        this.mfa = mfa;
+        this.audit = audit;
     }
 
     public Tokens register(String slug, String name, String email, String displayName, String password) {
@@ -46,6 +50,7 @@ public class IdentityService {
                 UUID tenant = UUID.randomUUID(), id = UUID.randomUUID();
                 db.update("INSERT INTO auth.tenants(id,slug,name) VALUES (?,?,?)", tenant, tenantSlug, tenantName);
                 var user = insertUser(tenant, id, userEmail, userName, hash, Role.ADMIN);
+                audit.record(tenant,id,id,"TENANT_REGISTERED");
                 return session(user);
             });
         } catch (DuplicateKeyException conflict) {
@@ -54,6 +59,9 @@ public class IdentityService {
     }
 
     public Tokens login(String slug, String email, String password) {
+        return login(slug,email,password,null);
+    }
+    public Tokens login(String slug, String email, String password, String code) {
         // Login uses the same generic response for unknown, disabled and incorrect credentials.
         if (password == null || password.length() > 128) throw AuthFailure.unauthorized();
         String normalizedSlug = slug == null ? "" : slug.strip().toLowerCase(java.util.Locale.ROOT);
@@ -64,6 +72,8 @@ public class IdentityService {
             User user = tenants.isEmpty() ? null : findUserByEmail(tenants.getFirst(), normalizedEmail);
             boolean matches = passwords.matches(password, user == null ? dummyHash : user.passwordHash());
             if (user == null || !user.enabled() || !matches) throw AuthFailure.unauthorized();
+            mfa.verifyLogin(user.tenantId(),user.id(),code);
+            audit.record(user.tenantId(),user.id(),user.id(),"LOGIN_SUCCEEDED");
             return session(user);
         });
     }
@@ -87,6 +97,7 @@ public class IdentityService {
                 revoke(sid.id(), now); return null;
             }
             db.update("UPDATE auth.refresh_tokens SET consumed_at=? WHERE token_hash=?", Timestamp.from(now), hash);
+            audit.record(user.tenantId(),user.id(),user.id(),"REFRESH_ROTATED");
             return tokens(user, sid.id(), expiry, now);
         });
         if (result == null) throw AuthFailure.unauthorized();
@@ -96,10 +107,11 @@ public class IdentityService {
     public void logout(String rawToken) {
         String hash = TokenIssuer.hash(rawToken);
         tx.executeWithoutResult(status -> {
-            var found = db.query("SELECT s.id,s.tenant_id FROM auth.refresh_sessions s JOIN auth.refresh_tokens t ON t.session_id=s.id WHERE t.token_hash=?",
-                    (rs, row) -> List.of(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class)), hash);
+            var found = db.query("SELECT s.id,s.tenant_id,s.user_id FROM auth.refresh_sessions s JOIN auth.refresh_tokens t ON t.session_id=s.id WHERE t.token_hash=?",
+                    (rs, row) -> List.of(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),rs.getObject("user_id",UUID.class)), hash);
             if (!found.isEmpty()) {
                 lockTenant(found.getFirst().get(1)); revoke(found.getFirst().getFirst(), clock.instant());
+                audit.record(found.getFirst().get(1),found.getFirst().get(2),found.getFirst().get(2),"LOGOUT");
             }
         });
     }
@@ -127,7 +139,9 @@ public class IdentityService {
         try {
             return tx.execute(status -> {
                 lockTenant(actor.tenantId()); admin(actor);
-                return insertUser(actor.tenantId(), UUID.randomUUID(), normalizedEmail, name, hash, role).view();
+                var created=insertUser(actor.tenantId(), UUID.randomUUID(), normalizedEmail, name, hash, role).view();
+                audit.record(actor.tenantId(),actor.userId(),created.id(),"USER_CREATED");
+                return created;
             });
         } catch (DuplicateKeyException conflict) {
             throw new AuthFailure(HttpStatus.CONFLICT, "Email already exists in tenant");
@@ -151,6 +165,7 @@ public class IdentityService {
             try { IdentityRules.keepAdmin(user.role(), user.enabled(), nextRole, nextEnabled, admins); }
             catch (IllegalStateException lastAdmin) { throw new AuthFailure(HttpStatus.CONFLICT, lastAdmin.getMessage()); }
             db.update("UPDATE auth.users SET role=?,enabled=?,recovery_version=recovery_version+1 WHERE tenant_id=? AND id=?", nextRole.name(), nextEnabled, actor.tenantId(), userId);
+            audit.record(actor.tenantId(),actor.userId(),userId,role==null?"ENABLED_CHANGED":"ROLE_CHANGED");
             db.update("UPDATE auth.refresh_sessions SET revoked_at=? WHERE tenant_id=? AND user_id=? AND revoked_at IS NULL",
                     Timestamp.from(clock.instant()), actor.tenantId(), userId);
             return findUser(actor.tenantId(), userId).view();

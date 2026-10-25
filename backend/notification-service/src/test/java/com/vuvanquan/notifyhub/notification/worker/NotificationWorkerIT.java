@@ -38,9 +38,9 @@ import static org.mockito.Mockito.*;
 import static com.vuvanquan.notifyhub.notification.worker.WorkerConfiguration.*;
 
 @Testcontainers
-@ActiveProfiles({"local", "worker", "events", "monitoring"})
+@ActiveProfiles({"local", "worker", "events", "monitoring", "operations"})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "notification.worker.polling-enabled=false", "notification.events.polling-enabled=false",
+        "notification.worker.polling-enabled=false", "notification.events.polling-enabled=false", "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.test",
         "notification.worker.max-attempts=3", "logging.level.org.apache.kafka=WARN",
         "notification.worker.initial-retry-delay=10s", "notification.worker.max-retry-delay=20s"})
 @Import(NotificationWorkerIT.TimeConfiguration.class)
@@ -76,6 +76,7 @@ class NotificationWorkerIT {
     @Autowired ObjectMapper json;
     @Autowired DeliveryWorker worker;
     @Autowired HandoffPublisher publisher;
+    @Autowired OperatorRedrive redrive;
     @Autowired ResultPublisher results;
     @Autowired NotificationTaskListener listener;
     @Autowired RabbitListenerEndpointRegistry listeners;
@@ -89,7 +90,7 @@ class NotificationWorkerIT {
     @BeforeEach void resetState() throws Exception {
         listeners.stop();
         for (String queue : List.of(EMAIL_QUEUE, SMS_QUEUE, EMAIL_DLQ, SMS_DLQ)) amqp.purgeQueue(queue);
-        jdbc.execute("TRUNCATE notification.result_outbox, notification.delivery_handoffs, notification.deliveries");
+        jdbc.execute("TRUNCATE notification.redrive_requests, notification.result_outbox, notification.delivery_handoffs, notification.deliveries");
         http.send(HttpRequest.newBuilder(mailUri("/api/v1/messages")).DELETE().build(), HttpResponse.BodyHandlers.discarding());
         reset(email, sms, AopTestUtils.getUltimateTargetObject(handoffs));
         clock.set(Instant.now());
@@ -99,6 +100,58 @@ class NotificationWorkerIT {
     @org.springframework.beans.factory.annotation.Autowired io.micrometer.core.instrument.MeterRegistry monitoringRegistry;
     @org.springframework.boot.test.web.server.LocalServerPort int port;
     @Autowired com.vuvanquan.notifyhub.monitoring.DatabaseMetrics monitoringSnapshot;
+
+    @Test void real_sms_protocol_rate_limit_uses_durable_capped_retry_then_records_acceptance() throws Exception {
+        listeners.stop();var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        var calls=new java.util.concurrent.atomic.AtomicInteger();String sid="SM"+"e".repeat(32);
+        server.createContext("/Messages.json",exchange->{exchange.getRequestBody().readAllBytes();boolean limited=calls.incrementAndGet()==1;byte[] body=(limited?"{}":"{\"sid\":\""+sid+"\",\"status\":\"queued\"}").getBytes(StandardCharsets.UTF_8);exchange.getResponseHeaders().add("Retry-After","3600");exchange.sendResponseHeaders(limited?429:201,body.length);try(var output=exchange.getResponseBody()){output.write(body);}});server.start();
+        try{
+            var provider=new TwilioSmsProvider(TwilioSmsProviderTest.ACCOUNT,TwilioSmsProviderTest.KEY,TwilioSmsProviderTest.SECRET,"+12025550100","",json,http,URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/Messages.json"));
+            doAnswer(call->provider.send(call.getArgument(0))).when(sms).send(any());
+            var task=task("SMS");byte[] bytes=json.writeValueAsBytes(task);worker.deliver(bytes,"SMS");
+            var due=jdbc.queryForObject("SELECT next_attempt_at FROM notification.deliveries WHERE notification_id=?",java.sql.Timestamp.class,task.notificationId()).toInstant();
+            assertThat(Duration.between(clock.instant(),due).toMillis()).isBetween(19999L,20000L);
+            clock.advance(Duration.ofSeconds(20));worker.deliver(bytes,"SMS");worker.deliver(bytes,"SMS");
+            assertThat(jdbc.queryForObject("SELECT status FROM notification.deliveries WHERE notification_id=?",String.class,task.notificationId())).isEqualTo("SENT");
+            assertThat(jdbc.queryForObject("SELECT provider_reference FROM notification.deliveries WHERE notification_id=?",String.class,task.notificationId())).isEqualTo(sid);
+            assertThat(calls.get()).isEqualTo(2);
+        }finally{server.stop(0);}
+    }
+    static final java.security.KeyPair OPERATIONS_KEY=operationsKey();
+    static java.security.KeyPair operationsKey(){try{var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);return generator.generateKeyPair();}catch(Exception e){throw new IllegalStateException(e);}}
+    private String operationsToken(String scope,UUID tenant) throws Exception {
+        var claims=new com.nimbusds.jwt.JWTClaimsSet.Builder().issuer("https://issuer.test").subject(UUID.randomUUID().toString()).audience("notifyhub").expirationTime(Date.from(Instant.now().plusSeconds(300))).claim("tenant_id",tenant.toString()).claim("scope",scope).build();
+        var token=new com.nimbusds.jwt.SignedJWT(new com.nimbusds.jose.JWSHeader(com.nimbusds.jose.JWSAlgorithm.RS256),claims);token.sign(new com.nimbusds.jose.crypto.RSASSASigner(OPERATIONS_KEY.getPrivate()));return token.serialize();
+    }
+    @Test void direct_operations_http_requires_admin_bearer_and_enforces_tenant_on_write() throws Exception {
+        var url="http://127.0.0.1:"+port+"/api/operations/dead-letters";
+        assertThat(http.send(HttpRequest.newBuilder(URI.create(url)).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode()).isIn(401,403);
+        assertThat(http.send(HttpRequest.newBuilder(URI.create(url)).header("Authorization","Bearer "+operationsToken("reports:read",UUID.randomUUID())).GET().build(),HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(403);
+        listeners.stop();var task=task("EMAIL");doThrow(new DeliveryFailure("InvalidMailMessage",false)).when(email).send(any());worker.deliver(json.writeValueAsBytes(task),"EMAIL");
+        String body=json.writeValueAsString(Map.of("requestId",UUID.randomUUID(),"reason","Provider repaired and reviewed"));
+        var other=HttpRequest.newBuilder(URI.create(url+"/"+task.notificationId()+"/redrive")).header("Content-Type","application/json").header("Authorization","Bearer "+operationsToken("users:write",UUID.randomUUID())).POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        assertThat(http.send(other,HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(404);
+        var own=HttpRequest.newBuilder(URI.create(url+"/"+task.notificationId()+"/redrive")).header("Content-Type","application/json").header("Authorization","Bearer "+operationsToken("users:write",task.tenantId())).POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        var response=http.send(own,HttpResponse.BodyHandlers.ofString());assertThat(response.statusCode()).isEqualTo(202);assertThat(response.body()).contains("notificationId");
+    }
+
+    @Test void audited_redrive_is_idempotent_tenant_scoped_and_keeps_original_result_immutable() throws Exception {
+        listeners.stop();var task=task("EMAIL");
+        doThrow(new DeliveryFailure("InvalidMailMessage",false)).when(email).send(any());
+        worker.deliver(json.writeValueAsBytes(task),"EMAIL");
+        UUID request=UUID.randomUUID(),actor=UUID.randomUUID();
+        UUID recovery=redrive.redrive(task.tenantId(),actor,task.notificationId(),request,"SMTP configuration repaired");
+        assertThat(redrive.redrive(task.tenantId(),actor,task.notificationId(),request,"SMTP configuration repaired")).isEqualTo(recovery);
+        assertThatThrownBy(()->redrive.redrive(task.tenantId(),actor,task.notificationId(),UUID.randomUUID(),"SMTP repaired again")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(()->redrive.redrive(UUID.randomUUID(),actor,task.notificationId(),UUID.randomUUID(),"Other tenant attempt")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        var bytes=jdbc.queryForObject("SELECT payload FROM notification.delivery_handoffs WHERE dedupe_key=?",byte[].class,"redrive:"+recovery);
+        doCallRealMethod().when(email).send(any());worker.deliver(bytes,"EMAIL");worker.deliver(bytes,"EMAIL");
+        assertThat(jdbc.queryForObject("SELECT status FROM notification.deliveries WHERE notification_id=?",String.class,recovery)).isEqualTo("SENT");
+        assertThat(jdbc.queryForObject("SELECT status FROM notification.deliveries WHERE notification_id=?",String.class,task.notificationId())).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notification.result_outbox",Integer.class)).isEqualTo(1);
+        assertThat(redrive.history(task.tenantId()).getFirst()).containsEntry("actor_id",actor).containsEntry("parent_id",task.notificationId());
+        assertThat(redrive.failures(UUID.randomUUID(),0)).isEmpty();
+    }
 
     @Test void monitoring_requires_its_own_credentials_and_cannot_authorize_business_api() throws Exception {
         monitoringSnapshot.refresh();
@@ -470,6 +523,7 @@ class NotificationWorkerIT {
     @TestConfiguration(proxyBeanMethods = false)
     static class TimeConfiguration {
         @Bean @Primary MutableClock mutableClock() { return new MutableClock(); }
+        @Bean org.springframework.security.oauth2.jwt.JwtDecoder operationsDecoder(){var decoder=org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey((java.security.interfaces.RSAPublicKey)OPERATIONS_KEY.getPublic()).build();decoder.setJwtValidator(org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer("https://issuer.test"));return decoder;}
     }
     static class MutableClock extends Clock {
         private volatile Instant now = Instant.now();

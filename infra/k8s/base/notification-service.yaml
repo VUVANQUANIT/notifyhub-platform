@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: notification-service}
+  template:
+    metadata:
+      labels: {app: notification-service}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: app
+          image: notifyhub/notification-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8083}
+          env:
+            - {name: SPRING_PROFILES_ACTIVE, value: "prod,worker,events,operations,monitoring,tracing"}
+          envFrom:
+            - configMapRef: {name: notifyhub-config}
+            - secretRef: {name: notification-service-secrets}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 640Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          startupProbe:
+            httpGet: {path: /actuator/health/readiness, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 20
+          volumeMounts:
+            - name: temp
+              mountPath: /tmp
+      volumes:
+        - name: temp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  type: ClusterIP
+  selector: {app: notification-service}
+  ports:
+    - {name: http, port: 8083, targetPort: http}

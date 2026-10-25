@@ -63,6 +63,7 @@ public class MessagingConfiguration {
         factory.setConsumerFactory(consumers);
         // Commit only after the listener's database transaction has returned successfully.
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setObservationEnabled(true);
         factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 2L)));
         return factory;
     }

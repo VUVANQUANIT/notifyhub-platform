@@ -9,6 +9,19 @@ import org.springframework.mock.env.MockEnvironment;
 
 class SigningKeysTest {
     @TempDir Path directory;
+    @Test void rotation_accepts_overlap_tokens_but_never_exposes_old_private_keys() throws Exception {
+        var old=new SigningKeys(directory.resolve("old.pem"),true);var current=new SigningKeys(directory.resolve("new.pem"),true);
+        Path overlap=directory.resolve("previous.json");Files.writeString(overlap,new com.nimbusds.jose.jwk.JWKSet(old.signingKey().toPublicJWK()).toString());
+        current.includePreviousPublicKeys(overlap);
+        assertThat(current.verificationJwks().getKeys()).hasSize(2);
+        var encoder=new org.springframework.security.oauth2.jwt.NimbusJwtEncoder(new com.nimbusds.jose.jwk.source.ImmutableJWKSet<>(new com.nimbusds.jose.jwk.JWKSet(old.signingKey())));
+        var claims=org.springframework.security.oauth2.jwt.JwtClaimsSet.builder().issuer("https://auth.example.com").subject("user").audience(java.util.List.of("notifyhub")).issuedAt(java.time.Instant.now()).expiresAt(java.time.Instant.now().plusSeconds(300)).build();
+        var token=encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(org.springframework.security.oauth2.jwt.JwsHeader.with(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).keyId(old.signingKey().getKeyID()).build(),claims)).getTokenValue();
+        assertThat(new AuthConfiguration().jwtDecoder(current,config("https://auth.example.com")).decode(token).getSubject()).isEqualTo("user");
+        assertThatThrownBy(()->new AuthConfiguration().jwtDecoder(new SigningKeys(directory.resolve("new.pem"),false),config("https://auth.example.com")).decode(token)).isInstanceOf(org.springframework.security.oauth2.jwt.JwtException.class);
+        Files.writeString(overlap,new com.nimbusds.jose.jwk.JWKSet(old.signingKey()).toString(false));
+        assertThatThrownBy(()->current.includePreviousPublicKeys(overlap)).isInstanceOf(IllegalArgumentException.class);
+    }
     @Test void local_key_survives_restart_and_jwks_contains_no_private_material() throws Exception {
         var path = directory.resolve("private.pem");
         var first = new SigningKeys(path, true);

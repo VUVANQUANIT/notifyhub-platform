@@ -1,5 +1,9 @@
 spring:
   rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:notifyhub}
+    password: ${RABBITMQ_PASSWORD:notifyhub_local_password}
     publisher-confirm-type: correlated
     publisher-returns: true
     connection-timeout: 5s
@@ -13,6 +17,14 @@ spring:
         max-concurrency: 2
         default-requeue-rejected: true
 notification:
+  sms:
+    provider: ${SMS_PROVIDER:simulated}
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID:}
+      api-key-sid: ${TWILIO_API_KEY_SID:}
+      api-key-secret: ${TWILIO_API_KEY_SECRET:}
+      from: ${TWILIO_FROM:}
+      messaging-service-sid: ${TWILIO_MESSAGING_SERVICE_SID:}
   worker:
     enabled: true
     polling-enabled: true

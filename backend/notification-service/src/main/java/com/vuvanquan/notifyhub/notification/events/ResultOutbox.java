@@ -18,6 +18,8 @@ public class ResultOutbox {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(SendNotificationTask task, String status, int attempts, String reference, String failure, Instant at) {
+        // Manual recovery is tracked separately; never rewrite the original completed campaign projection.
+        if (jdbc.queryForObject("SELECT count(*) FROM notification.deliveries WHERE notification_id=? AND redrive_parent_id IS NOT NULL",Integer.class,task.notificationId())>0) return;
         var event = new DeliveryResultEvent(UUID.randomUUID(), status.equals("SENT") ? "NotificationSent" : "NotificationFailed",
                 1, task.tenantId(), task.campaignId(), at, task.correlationId(),
                 new DeliveryResultEvent.Payload(task.notificationId(), task.recipientId(), task.channel(), status,

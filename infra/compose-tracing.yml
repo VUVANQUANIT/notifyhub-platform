@@ -1,0 +1,16 @@
+services:
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo.yml"]
+    user: "0"
+    mem_limit: 1g
+    environment:
+      GOMEMLIMIT: 768MiB
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./infra/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+volumes:
+  tempo_data:

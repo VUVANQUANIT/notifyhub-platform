@@ -1,0 +1,30 @@
+server:
+  http_listen_port: 3200
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+ingester:
+  concurrent_flushes: 1
+  max_block_bytes: 1048576
+  max_block_duration: 1m
+storage:
+  trace:
+    backend: local
+    pool:
+      max_workers: 4
+      queue_depth: 100
+    block:
+      parquet_row_group_size_bytes: 1048576
+    search:
+      read_buffer_count: 2
+      read_buffer_size_bytes: 1048576
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+compactor:
+  compaction:
+    block_retention: 72h
