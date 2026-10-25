@@ -1,0 +1,13 @@
+route:
+  receiver: local
+  group_by: [alertname, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+# Local UI only. Add an explicitly configured receiver for external notifications.
+receivers:
+  - name: local
+inhibit_rules:
+  - source_matchers: ['alertname="NotifyHubServiceDown"']
+    target_matchers: ['alertname="NotifyHubDatabaseMetricsUnavailable"']
+    equal: [service, instance]

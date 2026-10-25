@@ -1,0 +1,23 @@
+spring:
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 5s
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 16
+        concurrency: 2
+        max-concurrency: 2
+        default-requeue-rejected: true
+notification:
+  worker:
+    enabled: true
+    polling-enabled: true
+    poll-delay-ms: 1000
+    max-attempts: 4
+    initial-retry-delay: 1s
+    max-retry-delay: 60s
+    mail-from: ${MAIL_FROM:notifyhub@localhost}

@@ -1,0 +1,774 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NotifyHub Campaign Service",
+    "version": "0.1.0",
+    "description": "Tenant-scoped Campaign API. Production requires a verified JWT with UUID sub and tenant_id claims, campaigns:read scope for GET and campaigns:write for POST. Local profile only: supply X-Tenant-Id and X-User-Id UUID headers instead of JWT. Cross-tenant resources return 404. Imports are synchronous, max 2 MiB / 10,000 CSV data records. RUNNING records durable start intent, not message delivery."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8082",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/campaigns": {
+      "get": {
+        "operationId": "listCampaigns",
+        "summary": "List current tenant campaigns",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "SCHEDULED",
+                "RUNNING",
+                "COMPLETED",
+                "FAILED"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createCampaign",
+        "summary": "Create draft; retries with same key/input/actor reuse campaign",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCampaign"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getCampaign",
+        "summary": "Get current tenant campaign",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/imports": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "importRecipients",
+        "summary": "Upload UTF-8 CSV with email or phoneNumber header",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipientImport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        },
+        "description": "Allowed only in DRAFT. Other columns become personalization. Duplicate destinations are ignored. Malformed CSV produces a persisted REJECTED batch (201), with no partial recipients. Row-level invalid destinations produce errors while valid rows are accepted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/imports/{importId}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "in": "path",
+          "name": "importId",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getRecipientImport",
+        "summary": "Get import result in current tenant/campaign",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipientImport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        }
+      }
+    },
+    "/api/campaigns/{id}/recipients": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listRecipients",
+        "summary": "List persisted recipients",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipientPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "size",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/campaigns/{id}/start": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "startCampaign",
+        "summary": "Start or schedule; requires valid recipients and no processing import",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Campaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "JWT missing or invalid"
+          },
+          "403": {
+            "description": "Insufficient scope or invalid actor claims"
+          },
+          "404": {
+            "description": "Not found in current tenant"
+          },
+          "409": {
+            "description": "State, idempotency or concurrent write conflict"
+          },
+          "413": {
+            "description": "Upload exceeds multipart limit"
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "description": "Same start key returns current state. A different key after start returns 409. Scheduled campaigns activate automatically when due."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "CreateCampaign": {
+        "type": "object",
+        "required": [
+          "name",
+          "channel",
+          "body"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "EMAIL",
+              "SMS"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 998,
+            "description": "Nonblank required for EMAIL; must be omitted/null for SMS."
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000
+          },
+          "scheduledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Not before creation. Omit/null for immediate."
+          }
+        }
+      },
+      "Campaign": {
+        "type": "object",
+        "required": [
+          "id",
+          "tenantId",
+          "name",
+          "channel",
+          "subject",
+          "body",
+          "scheduledAt",
+          "status",
+          "createdBy",
+          "createdAt",
+          "startedAt",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "EMAIL",
+              "SMS"
+            ]
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "scheduledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SCHEDULED",
+              "RUNNING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RecipientImport": {
+        "type": "object",
+        "required": [
+          "id",
+          "campaignId",
+          "status",
+          "summary",
+          "errors",
+          "rejectionReason",
+          "createdAt",
+          "completedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "campaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PROCESSING",
+              "COMPLETED",
+              "REJECTED"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ImportSummary"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "rowNumber",
+                "message"
+              ],
+              "properties": {
+                "rowNumber": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "rejectionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ImportSummary": {
+        "type": "object",
+        "required": [
+          "totalRows",
+          "validRows",
+          "duplicateRows",
+          "invalidRows"
+        ],
+        "properties": {
+          "totalRows": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "validRows": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "duplicateRows": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "invalidRows": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Recipient": {
+        "type": "object",
+        "required": [
+          "id",
+          "destination",
+          "personalization",
+          "sourceImportId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "personalization": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sourceImportId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CampaignPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalElements",
+          "page",
+          "size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Campaign"
+            }
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "RecipientPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "totalElements",
+          "page",
+          "size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipient"
+            }
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      }
+    }
+  }
+}

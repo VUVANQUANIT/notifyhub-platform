@@ -1,0 +1,16 @@
+# Workstation only. Production must supply its own DB, SMTP and broker configuration.
+server:
+  address: 127.0.0.1
+spring:
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/notifyhub}
+    username: ${NOTIFICATION_DB_USERNAME:notifyhub}
+    password: ${NOTIFICATION_DB_PASSWORD:notifyhub_local_password}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:notifyhub}
+    password: ${RABBITMQ_PASSWORD:notifyhub_local_password}

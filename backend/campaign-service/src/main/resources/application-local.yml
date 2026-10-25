@@ -1,0 +1,8 @@
+# Explicit opt-in for workstation development; never activate on a shared deployment.
+server:
+  address: 127.0.0.1
+spring:
+  datasource:
+    url: ${CAMPAIGN_DB_URL:jdbc:postgresql://localhost:5432/notifyhub}
+    username: ${CAMPAIGN_DB_USERNAME:notifyhub}
+    password: ${CAMPAIGN_DB_PASSWORD:notifyhub_local_password}

@@ -1,0 +1,8 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          jwk-set-uri: ${JWT_JWK_SET_URI:${JWT_ISSUER_URI}/.well-known/jwks.json}
+          audiences: ${JWT_AUDIENCE:notifyhub}

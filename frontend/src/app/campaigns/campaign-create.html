@@ -1,0 +1,16 @@
+<app-shell section="Tạo chiến dịch">
+  <a class="back-link" routerLink="/campaigns">← Danh sách chiến dịch</a><h1>Tạo chiến dịch<span class="accent">.</span></h1><p class="muted">Chiến dịch được lưu thành bản nháp. Nhập người nhận trước khi bắt đầu gửi.</p>
+  @if (!canWrite) { <div class="notice error" role="alert">Bạn cần quyền quản trị hoặc điều phối để tạo chiến dịch.</div> }
+  <form class="business-form" #form="ngForm" (ngSubmit)="create()">
+    <fieldset [disabled]="!canWrite || state.busy() || !!pending">
+      <label for="campaign-name">Tên chiến dịch</label><input id="campaign-name" name="name" [(ngModel)]="name" required maxlength="255">
+      <label for="campaign-channel">Kênh gửi</label><select id="campaign-channel" name="channel" [(ngModel)]="channel"><option value="EMAIL">Email</option><option value="SMS">SMS giả lập</option></select>
+      @if (channel === 'EMAIL') { <label for="campaign-subject">Tiêu đề email</label><input id="campaign-subject" name="subject" [(ngModel)]="subject" required maxlength="998"> }
+      <label for="campaign-body">Nội dung thông điệp</label><textarea id="campaign-body" name="body" [(ngModel)]="body" required maxlength="100000" rows="7" placeholder="Xin chào…"></textarea><p class="field-hint">Dùng cột CSV để cá nhân hóa, ví dụ: {{ '{{name}}' }}.</p>
+      <label for="campaign-date">Lịch gửi (không bắt buộc)</label><input id="campaign-date" type="datetime-local" name="scheduledAt" [(ngModel)]="scheduledAt"><p class="field-hint">Thời gian theo múi giờ của thiết bị. Bỏ trống để gửi ngay khi bấm bắt đầu.</p>
+    </fieldset>
+    @if (state.error()) { <div class="notice error" role="alert">{{ state.error() }} @if (state.remaining()) { Thử lại sau {{ state.remaining() }} giây. }</div> }
+    @if (pending && !state.busy()) { <p class="field-hint">Yêu cầu chưa được xác nhận. Thử lại sẽ gửi cùng nội dung để tránh tạo trùng.</p> }
+    <button class="primary-button" type="submit" [disabled]="!canWrite || state.blocked || (!pending && form.invalid)">{{ state.busy() ? 'Đang lưu…' : pending ? 'Thử lại tạo chiến dịch' : 'Lưu bản nháp' }}</button>
+  </form>
+</app-shell>
