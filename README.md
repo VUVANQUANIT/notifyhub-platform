@@ -1,6 +1,6 @@
 # NotifyHub
 
-Đợt hoàn thiện vận hành: [mời thành viên](docs/member-invitations.md), [MFA/rotation/retention](docs/auth-hardening.md), [audit/tracing/redrive](docs/operations-audit.md), [k3d/HTTPS/backup và restore](docs/deployment.md).
+Đợt hoàn thiện vận hành: [mời thành viên](docs/member-invitations.md), [MFA/rotation/retention](docs/auth-hardening.md), [audit/tracing/redrive](docs/operations-audit.md), [k3d/HTTPS/backup và restore](docs/deployment.md), [SMTP/Twilio](docs/delivery-providers.md).
 
 NotifyHub is a multi-tenant notification platform for creating campaigns and delivering email/SMS messages asynchronously.
 

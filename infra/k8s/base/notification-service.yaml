@@ -62,4 +62,3 @@ spec:
   selector: {app: notification-service}
   ports:
     - {name: http, port: 8083, targetPort: http}
-

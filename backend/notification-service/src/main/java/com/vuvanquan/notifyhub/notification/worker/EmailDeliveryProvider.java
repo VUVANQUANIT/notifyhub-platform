@@ -33,6 +33,8 @@ public class EmailDeliveryProvider {
             message.setHeader("X-NotifyHub-Correlation-Id", task.correlationId().toString());
             mail.send(message);
             return message.getMessageID();
+        } catch (org.springframework.mail.MailAuthenticationException exception) {
+            throw new DeliveryFailure("SmtpAuthenticationRejected", false);
         } catch (MailException exception) {
             throw new DeliveryFailure("SmtpUnavailable", true);
         } catch (MessagingException exception) {

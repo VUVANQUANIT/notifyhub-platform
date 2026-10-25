@@ -62,4 +62,3 @@ spec:
   selector: {app: reporting-service}
   ports:
     - {name: http, port: 8084, targetPort: http}
-

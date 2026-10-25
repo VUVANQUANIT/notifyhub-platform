@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnProperty(name = "notification.worker.enabled", havingValue = "true")
-public class SimulatedSmsProvider {
+public class SimulatedSmsProvider implements SmsDeliveryProvider {
     /** Deterministic local adapter: no external SMS request or recipient data in logs. */
     public String send(SendNotificationTask task) {
         return "sms-simulated:" + task.notificationId();

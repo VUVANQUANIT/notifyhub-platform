@@ -18,7 +18,7 @@ public class DeliveryWorker {
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final EmailDeliveryProvider email;
-    private final SimulatedSmsProvider sms;
+    private final SmsDeliveryProvider sms;
     private final DeliveryPolicy policy;
     private final HandoffStore handoffs;
     private final Clock clock;
@@ -26,7 +26,7 @@ public class DeliveryWorker {
     private final DeliveryMetrics metrics;
 
     public DeliveryWorker(JdbcTemplate jdbc, ObjectMapper json, EmailDeliveryProvider email,
-            SimulatedSmsProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock, ResultOutbox results, DeliveryMetrics metrics) {
+            SmsDeliveryProvider sms, DeliveryPolicy policy, HandoffStore handoffs, Clock clock, ResultOutbox results, DeliveryMetrics metrics) {
         this.jdbc = jdbc;
         this.json = json;
         this.email = email;
@@ -88,7 +88,7 @@ public class DeliveryWorker {
         } catch (DeliveryFailure failure) {
             metrics.attempt(task.channel(), "failure", System.nanoTime() - attemptStarted);
             if (policy.shouldRetry(attempt, failure.retryable())) {
-                Instant due = DeliveryTime.now(clock).plus(policy.retryDelay(attempt));
+                Instant due = DeliveryTime.now(clock).plus(policy.retryDelay(attempt, failure.retryAfter()));
                 jdbc.update("""
                         UPDATE notification.deliveries SET status='RETRY_PENDING',attempts=?,next_attempt_at=?,
                         last_error=?,updated_at=? WHERE notification_id=?
