@@ -26,8 +26,16 @@ spring:
             - id: reporting-service
               uri: ${REPORTING_SERVICE_URI:http://localhost:8084}
               predicates:
-                - Path=/api/reports/**
+                - Path=/api/reports/**,/api/audit
+            - id: notification-operations
+              uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/operations/**
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:

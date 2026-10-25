@@ -22,6 +22,10 @@ spring:
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:

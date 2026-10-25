@@ -18,12 +18,15 @@ public class ReportMessagingConfiguration {
             @Value("${reporting.messaging.result-topic}") String results,
             @Value("${reporting.messaging.campaign-topic}") String campaigns,
             @Value("${reporting.messaging.partitions:3}") int partitions,
-            @Value("${reporting.messaging.replicas:1}") int replicas) {
+            @Value("${reporting.messaging.replicas:1}") int replicas,
+            @Value("${reporting.audit.topic:notifyhub.identity.audit.v1}") String audit) {
         return new KafkaAdmin.NewTopics(
                 TopicBuilder.name(results).partitions(partitions).replicas(replicas).build(),
                 TopicBuilder.name(campaigns).partitions(partitions).replicas(replicas).build(),
                 TopicBuilder.name(results + ".reporting.dlt").partitions(partitions).replicas(replicas).build(),
-                TopicBuilder.name(campaigns + ".reporting.dlt").partitions(partitions).replicas(replicas).build());
+                TopicBuilder.name(campaigns + ".reporting.dlt").partitions(partitions).replicas(replicas).build(),
+                TopicBuilder.name(audit).partitions(3).replicas(replicas).build(),
+                TopicBuilder.name(audit+".reporting.dlt").partitions(3).replicas(replicas).build());
     }
     @Bean ConcurrentKafkaListenerContainerFactory<Object, Object> reportResultFactory(
             ConsumerFactory<Object, Object> consumers, KafkaTemplate<Object, Object> template,
@@ -32,6 +35,7 @@ public class ReportMessagingConfiguration {
             ConsumerFactory<Object, Object> consumers, KafkaTemplate<Object, Object> template,
             @Value("${reporting.messaging.campaign-topic}") String topic) { return factory(consumers, template, topic); }
 
+    @Bean ConcurrentKafkaListenerContainerFactory<Object,Object> reportAuditFactory(ConsumerFactory<Object,Object> consumers,KafkaTemplate<Object,Object> template,@Value("${reporting.audit.topic:notifyhub.identity.audit.v1}") String topic) {return factory(consumers,template,topic);}
     private ConcurrentKafkaListenerContainerFactory<Object, Object> factory(
             ConsumerFactory<Object, Object> consumers, KafkaTemplate<Object, Object> template, String topic) {
         var recoverer = new DeadLetterPublishingRecoverer(template, (record, error) -> new TopicPartition(topic + ".reporting.dlt", record.partition()));
@@ -39,6 +43,7 @@ public class ReportMessagingConfiguration {
         var factory = new ConcurrentKafkaListenerContainerFactory<Object, Object>();
         factory.setConsumerFactory(consumers);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
+        factory.getContainerProperties().setObservationEnabled(true);
         factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 2L)));
         return factory;
     }

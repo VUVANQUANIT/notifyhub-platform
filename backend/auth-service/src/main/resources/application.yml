@@ -62,6 +62,10 @@ auth:
     mail-poll-enabled: true
     mail-poll-delay: 1000
 management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
   endpoints:
     web:
       exposure:

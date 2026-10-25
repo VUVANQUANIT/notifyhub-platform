@@ -25,5 +25,6 @@ public class IdentityRetention {
             db.update("DELETE FROM auth.recovery_challenges c WHERE c.id IN (SELECT id FROM auth.recovery_challenges WHERE expires_at<? AND NOT EXISTS (SELECT 1 FROM auth.recovery_mail_outbox o WHERE o.challenge_id=auth.recovery_challenges.id AND o.state='PENDING') ORDER BY expires_at LIMIT 500)",cutoff);
             db.update("DELETE FROM auth.invitations WHERE id IN (SELECT id FROM auth.invitations WHERE expires_at<? ORDER BY expires_at LIMIT 500)",cutoff);
             db.update("UPDATE auth.users SET mfa_pending_secret=NULL,mfa_pending_expires_at=NULL WHERE id IN (SELECT id FROM auth.users WHERE mfa_pending_expires_at<? ORDER BY mfa_pending_expires_at LIMIT 500)",now);
+            db.update("DELETE FROM auth.audit_outbox WHERE event_id IN (SELECT event_id FROM auth.audit_outbox WHERE published_at IS NOT NULL AND occurred_at<? ORDER BY occurred_at LIMIT 500)",Timestamp.from(clock.instant().minus(Duration.ofDays(90))));
     }
 }

@@ -19,8 +19,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class MfaService {
     private final JdbcTemplate db; private final TransactionTemplate tx; private final ControlCrypto crypto;
     private final PasswordEncoder passwords; private final RedisControls controls; private final Clock clock;
-    public MfaService(JdbcTemplate db,PlatformTransactionManager manager,ControlCrypto crypto,PasswordEncoder passwords,RedisControls controls,Clock clock){
+    private final IdentityAudit audit;
+    public MfaService(JdbcTemplate db,PlatformTransactionManager manager,ControlCrypto crypto,PasswordEncoder passwords,RedisControls controls,Clock clock,IdentityAudit audit){
         this.db=db;this.tx=new TransactionTemplate(manager);this.crypto=crypto;this.passwords=passwords;this.controls=controls;this.clock=clock;
+        this.audit=audit;
     }
     public record Enrollment(String secret,String uri,Instant expiresAt) {}
     public boolean enabled(Actor actor){var rows=db.query("SELECT mfa_secret IS NOT NULL FROM auth.users u JOIN auth.tenants t ON t.id=u.tenant_id WHERE u.tenant_id=? AND u.id=? AND u.enabled AND t.enabled",(rs,n)->rs.getBoolean(1),actor.tenantId(),actor.userId());if(rows.isEmpty())throw AuthFailure.unauthorized();return rows.getFirst();}
@@ -31,6 +33,7 @@ public class MfaService {
             if(row.get("mfa_secret")!=null)throw new AuthFailure(HttpStatus.CONFLICT,"MFA is already enabled");
             String secret=Totp.secret();Instant expiry=clock.instant().plus(Duration.ofMinutes(10));
             db.update("UPDATE auth.users SET mfa_pending_secret=?,mfa_pending_expires_at=? WHERE tenant_id=? AND id=?",crypto.encrypt(secret),Timestamp.from(expiry),actor.tenantId(),actor.userId());
+            audit.record(actor.tenantId(),actor.userId(),actor.userId(),"MFA_ENROLLMENT");
             String label=URLEncoder.encode("NotifyHub:"+row.get("slug")+":"+row.get("email"),StandardCharsets.UTF_8).replace("+","%20");
             return new Enrollment(secret,"otpauth://totp/"+label+"?secret="+secret+"&issuer=NotifyHub&algorithm=SHA1&digits=6&period=30",expiry);
         });
@@ -46,7 +49,7 @@ public class MfaService {
             db.update("DELETE FROM auth.mfa_recovery_codes WHERE tenant_id=? AND user_id=?",actor.tenantId(),actor.userId());
             var recovery=new ArrayList<String>();var random=new SecureRandom();
             for(int i=0;i<8;i++){byte[] bytes=new byte[32];random.nextBytes(bytes);String raw=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);recovery.add(raw);db.update("INSERT INTO auth.mfa_recovery_codes(tenant_id,user_id,code_hash) VALUES (?,?,?)",actor.tenantId(),actor.userId(),TokenIssuer.hash(raw));}
-            revoke(actor);return List.copyOf(recovery);
+            revoke(actor);audit.record(actor.tenantId(),actor.userId(),actor.userId(),"MFA_ENABLED");return List.copyOf(recovery);
         });
     }
     public void disable(Actor actor,String password,String code){
@@ -54,6 +57,7 @@ public class MfaService {
         tx.executeWithoutResult(status->{var row=lockUser(actor);requirePassword(row,password);if(row.get("mfa_secret")==null)throw AuthFailure.unauthorized();verifyLocked(actor,row,code);
             db.update("UPDATE auth.users SET mfa_secret=NULL,mfa_pending_secret=NULL,mfa_pending_expires_at=NULL,mfa_last_step=-1 WHERE tenant_id=? AND id=?",actor.tenantId(),actor.userId());
             db.update("DELETE FROM auth.mfa_recovery_codes WHERE tenant_id=? AND user_id=?",actor.tenantId(),actor.userId());revoke(actor);
+            audit.record(actor.tenantId(),actor.userId(),actor.userId(),"MFA_DISABLED");
         });
     }
     // Called only after validating password and locking tenant in the login transaction.

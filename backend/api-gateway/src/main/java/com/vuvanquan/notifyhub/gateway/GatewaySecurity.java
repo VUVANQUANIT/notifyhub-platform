@@ -31,6 +31,8 @@ public class GatewaySecurity {
                         .pathMatchers(HttpMethod.GET, "/api/auth/users").hasAuthority("SCOPE_users:read")
                         .pathMatchers("/api/auth/users/**").hasAuthority("SCOPE_users:write")
                         .pathMatchers("/api/auth/**").authenticated()
+                        .pathMatchers(HttpMethod.GET, "/api/audit").hasAuthority("SCOPE_users:read")
+                        .pathMatchers("/api/operations/**").hasAuthority("SCOPE_users:write")
                         .pathMatchers(HttpMethod.GET, "/api/campaigns", "/api/campaigns/**").hasAuthority("SCOPE_campaigns:read")
                         .pathMatchers(HttpMethod.POST, "/api/campaigns", "/api/campaigns/**").hasAuthority("SCOPE_campaigns:write")
                         .pathMatchers(HttpMethod.GET, "/api/reports/**").hasAuthority("SCOPE_reports:read")

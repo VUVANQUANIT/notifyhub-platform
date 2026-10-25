@@ -23,6 +23,7 @@ public class ReportSecurity {
         return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/audit").hasAuthority("SCOPE_users:read")
                         .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAuthority("SCOPE_reports:read").anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults())).build();
     }
